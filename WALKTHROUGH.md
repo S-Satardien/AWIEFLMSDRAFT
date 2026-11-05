@@ -208,7 +208,7 @@ awief-lms/
 │   └── moodle_quizzes.json         # Entrepreneurship competency quiz backup
 ├── src/
 │   ├── app/
-│   │   ├── admin/                  # Royalties, Course Builder, Users, Analytics
+│   │   ├── admin/                  # Royalties, Hierarchical Sub-Tabs, Quizzes, Users
 │   │   ├── catalog/                # Priced masterclass catalogue
 │   │   ├── certificate/[id]/       # Plum & Gold QR certificate
 │   │   ├── course/[id]/            # Hybrid Player (Native + SCORM)
@@ -221,8 +221,37 @@ awief-lms/
 │   │   ├── verify/[certificateId]/ # Public credential verification portal
 │   │   ├── globals.css             # AWIEF Plum, Gold, and theme variables
 │   │   └── layout.tsx              # Google Fonts (Outfit & Playfair Display)
-│   └── components/
-│       ├── Navbar.tsx              # AWIEF header & navigation
-│       └── Footer.tsx              # AWIEF HQ, UN ECOSOC status & links
+│   ├── components/
+│   │   ├── Icons.tsx               # Safe RSC Client-Boundary Lucide SVG Icon Wrapper
+│   │   ├── Navbar.tsx              # AWIEF header & navigation
+│   │   └── Footer.tsx              # AWIEF HQ, UN ECOSOC status & links
+│   └── types/
+│       └── lucide-react.d.ts       # Ambient type declaration for Lucide icons
 └── seed.js                         # Database seed engine
 ```
+
+---
+
+## 6. Phase 10: Emoji Removal & Administrative Sub-Tabs Architecture
+
+### 6.1 Complete Emoji Elimination & Lucide SVG Integration
+- **0 Emojis**: Every single emoji and unicode glyph (flags, stars, checkmarks, cross marks, padlocks) was completely removed across all 24 UI templates, components, and data libraries (`src/lib/countries.ts`).
+- **Standardized Lucide SVG Icons**: Replaced with vector icons from `lucide-react`:
+  - Country selection dropdowns use clean ISO country codes (`[ZA] South Africa`, `[NG] Nigeria`, `[KE] Kenya`) rather than unicode flag emojis that render inconsistently across Windows/macOS/Linux.
+  - Action buttons and navigation use `Award`, `Check`, `Plus`, `Pencil`, `Trash2`, `HelpCircle`, `X`, `BookOpen`, `CircleDollarSign`, `Users`, `GraduationCap`, `Lock`, `Sparkles`, `ShieldCheck`, `AlertTriangle`.
+- **RSC Client Boundary (`src/components/Icons.tsx`)**: Isolated Lucide icons behind a dedicated client-boundary wrapper to ensure React 19 Server Components render without context-evaluation errors in Next.js Turbopack.
+
+### 6.2 Admin Portal Hierarchical Sub-Tabs Architecture
+The Admin Portal (`/admin`) is now structured into an intuitive 2-level hierarchy:
+
+1. **Author Royalties & Statements** (`CircleDollarSign`):
+   - Executive financial KPIs, monthly statement filter, per-author and per-course revenue distribution, CSV export, and printable PDF statements.
+2. **Courses & Quizzes** (`BookOpen`):
+   - **Sub-Tab 1: Masterclass Builder** (`Layers`): View, create, and edit courses (title, pricing, author, royalty rate %, bite-sized module count). Each course card includes a direct **"Quizzes"** button that auto-navigates to that course's quizzes.
+   - **Sub-Tab 2: Course Quizzes & Assessments** (`HelpCircle`): Quizzes are now explicitly scoped to their parent course. Administrators can filter quizzes by Masterclass scope (`Investment Readiness`, `Export Trade`, `Financial Mastery`, `Pitch 'n Grow`, or `All Courses`), preview questions, and author new quizzes that auto-bind to the selected course.
+3. **Learners & Analytics** (`GraduationCap`):
+   - Sub-tabs for **Cohort Progress**, **Course Surveys**, **Issued Certificates**, and **Quiz Item Diagnostics**.
+4. **User Management** (`Users`):
+   - User administration, role modification (Admin, Faculty Author, Learner), and account deactivation.
+5. **Reviewer Annotations** (`MessageSquareCheck`):
+   - Faculty text highlights and peer review comments on SCORM/Articulate modules.
