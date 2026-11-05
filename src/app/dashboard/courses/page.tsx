@@ -3,6 +3,7 @@ import { getDashboardData, getMyCoursesList } from "../actions";
 import { prisma } from "@/lib/prisma";
 import fs from "fs";
 import path from "path";
+import { Award } from "@/components/Icons";
 
 export const dynamic = "force-dynamic";
 
@@ -150,7 +151,8 @@ export default async function CoursesPage() {
                         href={`/certificate/${course.id}`}
                         className="px-5 py-2.5 bg-[#7F3D59] hover:bg-[#5E2C41] text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 font-serif"
                       >
-                        <span>★ View Certificate</span>
+                        <Award className="w-3.5 h-3.5 text-[#D4AF37]" />
+                        <span>View Certificate</span>
                       </Link>
                     )}
                   </div>

@@ -1006,6 +1006,7 @@ async function main() {
   const quizzes = [
     {
       id: 1,
+      courseId: 'investment-readiness',
       name: 'Investment Readiness & Valuation Essentials',
       intro: 'Evaluate your readiness on cap table management, post-money valuation, SAFE notes, and due diligence.',
       questions: [
@@ -1049,6 +1050,7 @@ async function main() {
     },
     {
       id: 2,
+      courseId: 'export-readiness',
       name: 'AfCFTA Cross-Border Trade & Customs Compliance',
       intro: 'Test your understanding of Rules of Origin, tariff lines, non-tariff barriers, and regional customs.',
       questions: [
@@ -1080,6 +1082,7 @@ async function main() {
     },
     {
       id: 3,
+      courseId: 'financial-management',
       name: 'Financial Ratios, Unit Economics & Cashflow Runway',
       intro: 'Evaluate your ability to calculate gross margins, CAC:LTV, and rolling cash runway.',
       questions: [
@@ -1099,6 +1102,7 @@ async function main() {
     },
     {
       id: 4,
+      courseId: 'pitch-n-grow',
       name: 'Customer Acquisition, Digital Funnels & Pitch Mastery',
       intro: 'Assess customer retention, digital channels, and pitch structure.',
       questions: [
@@ -1118,6 +1122,7 @@ async function main() {
     },
     {
       id: 5,
+      courseId: 'investment-readiness',
       name: 'Governance, Board Structure & Legal Risk for SMEs',
       intro: 'Master board committees, advisory boards, and shareholder agreements.',
       questions: [
@@ -1137,6 +1142,7 @@ async function main() {
     },
     {
       id: 6,
+      courseId: 'export-readiness',
       name: 'ESG, Impact Measurement & Pan-African Supply Chains',
       intro: 'Examine environmental sustainability, social inclusion metrics, and governance transparency.',
       questions: [
@@ -1162,6 +1168,7 @@ async function main() {
       update: {
         name: q.name,
         intro: q.intro,
+        courseId: q.courseId || null,
         questionsJson: JSON.stringify(q.questions),
       },
       create: {
@@ -1169,6 +1176,7 @@ async function main() {
         quizKey: q.id.toString(),
         name: q.name,
         intro: q.intro,
+        courseId: q.courseId || null,
         questionsJson: JSON.stringify(q.questions),
       },
     });

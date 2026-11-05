@@ -2,10 +2,12 @@
 
 import { useState } from "react";
 import { saveAdminCourse, deleteAdminCourse } from "./actions";
+import { Plus, Pencil, Trash2, HelpCircle, X, Check } from "lucide-react";
 
 interface CourseManagementTabProps {
   courses: any[];
   onRefresh: () => void;
+  onManageCourseQuizzes?: (courseId: string) => void;
 }
 
 /**
@@ -16,7 +18,7 @@ interface CourseManagementTabProps {
  * @param {CourseManagementTabProps} props - Component properties.
  * @returns {JSX.Element} The rendered course builder.
  */
-export default function CourseManagementTab({ courses, onRefresh }: CourseManagementTabProps) {
+export default function CourseManagementTab({ courses, onRefresh, onManageCourseQuizzes }: CourseManagementTabProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [selectedCourse, setSelectedCourse] = useState<any | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -140,7 +142,8 @@ export default function CourseManagementTab({ courses, onRefresh }: CourseManage
             onClick={handleStartCreate}
             className="px-5 py-2.5 bg-[#7F3D59] hover:bg-[#5E2C41] text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 self-start sm:self-auto shrink-0"
           >
-            <span>+ Create New Masterclass</span>
+            <Plus className="w-4 h-4" />
+            <span>Create New Masterclass</span>
           </button>
         )}
       </div>
@@ -158,9 +161,10 @@ export default function CourseManagementTab({ courses, onRefresh }: CourseManage
             <button
               type="button"
               onClick={() => setIsEditing(false)}
-              className="text-xs text-gray-400 hover:text-gray-800 font-bold"
+              className="text-xs text-gray-400 hover:text-gray-800 font-bold inline-flex items-center gap-1 p-1 rounded-lg hover:bg-gray-100"
             >
-              Cancel ✕
+              <X className="w-4 h-4" />
+              <span>Cancel</span>
             </button>
           </div>
 
@@ -417,21 +421,37 @@ export default function CourseManagementTab({ courses, onRefresh }: CourseManage
                       {c.isPublished ? "Published" : "Draft"}
                     </span>
                   </td>
-                  <td className="py-3 px-4 text-center space-x-2">
-                    <button
-                      type="button"
-                      onClick={() => handleStartEdit(c)}
-                      className="px-2.5 py-1 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded text-[11px] font-bold"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(c.id)}
-                      className="px-2.5 py-1 bg-red-50 hover:bg-red-100 text-red-600 rounded text-[11px] font-bold"
-                    >
-                      Remove
-                    </button>
+                  <td className="py-3 px-4 text-center">
+                    <div className="flex items-center justify-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => handleStartEdit(c)}
+                        className="px-2.5 py-1 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded text-[11px] font-bold inline-flex items-center gap-1"
+                        title="Edit Masterclass Details"
+                      >
+                        <Pencil className="w-3 h-3 text-gray-600" />
+                        <span>Edit</span>
+                      </button>
+                      {onManageCourseQuizzes && (
+                        <button
+                          type="button"
+                          onClick={() => onManageCourseQuizzes(c.id)}
+                          className="px-2.5 py-1 bg-[#FDF8F9] hover:bg-[#EAD7E0] text-[#7F3D59] border border-[#7F3D59]/30 rounded text-[11px] font-bold inline-flex items-center gap-1"
+                          title="Manage Quizzes for this Course"
+                        >
+                          <HelpCircle className="w-3 h-3 text-[#7F3D59]" />
+                          <span>Quizzes</span>
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(c.id)}
+                        className="px-2 py-1 bg-red-50 hover:bg-red-100 text-red-600 rounded text-[11px] font-bold inline-flex items-center gap-1"
+                        title="Remove Masterclass"
+                      >
+                        <Trash2 className="w-3 h-3 text-red-600" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

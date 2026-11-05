@@ -18,6 +18,7 @@ import {
   updateReviewComment,
   deleteReviewComment,
 } from './reviewActions';
+import { Wifi, Zap, Award, Check, Mic, Globe, Download, X } from 'lucide-react';
 
 interface ModuleData {
   id: string;
@@ -309,7 +310,17 @@ This institutional framework was synthesized for African women entrepreneurs to 
               }`}
               title="Toggle Low-Bandwidth Mode for slower mobile connections"
             >
-              <span>{isLowBandwidth ? "📶 Low-Data Active (-90% Data)" : "⚡ Full Media Mode"}</span>
+              {isLowBandwidth ? (
+                <span className="flex items-center gap-1.5">
+                  <Wifi className="w-3.5 h-3.5 text-amber-300" />
+                  <span>Low-Data Active (-90% Data)</span>
+                </span>
+              ) : (
+                <span className="flex items-center gap-1.5">
+                  <Zap className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Full Media Mode</span>
+                </span>
+              )}
             </button>
           )}
 
@@ -328,9 +339,10 @@ This institutional framework was synthesized for African women entrepreneurs to 
           {(isCompleted || progressPercent >= 100) && (
             <Link
               href={`/course/${course.id}/survey`}
-              className="px-3.5 py-1.5 bg-[#D4AF37] hover:bg-[#B89628] text-[#1D0B14] font-serif font-bold text-xs rounded-full shadow-md transition-all animate-pulse"
+              className="px-3.5 py-1.5 bg-[#D4AF37] hover:bg-[#B89628] text-[#1D0B14] font-serif font-bold text-xs rounded-full shadow-md transition-all animate-pulse inline-flex items-center gap-1.5"
             >
-              ★ Claim Verifiable Certificate →
+              <Award className="w-3.5 h-3.5 text-[#1D0B14]" />
+              <span>Claim Verifiable Certificate →</span>
             </Link>
           )}
 
@@ -384,7 +396,7 @@ This institutional framework was synthesized for African women entrepreneurs to 
                           : "bg-gray-800 text-gray-400"
                       }`}
                     >
-                      {isDone ? "✓" : idx + 1}
+                      {isDone ? <Check className="w-3 h-3 text-white" /> : idx + 1}
                     </span>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-1 mb-1">
@@ -438,8 +450,8 @@ This institutional framework was synthesized for African women entrepreneurs to 
                     <div className="p-8 space-y-6">
                       <div className="flex items-center justify-between pb-4 border-b border-[#3E1A29]">
                         <div className="flex items-center gap-3">
-                          <span className="w-10 h-10 rounded-full bg-amber-500/20 text-amber-300 flex items-center justify-center font-bold text-lg">
-                            🎙
+                          <span className="w-10 h-10 rounded-full bg-amber-500/20 text-amber-300 flex items-center justify-center">
+                            <Mic className="w-5 h-5 text-amber-300" />
                           </span>
                           <div>
                             <h4 className="text-sm font-bold text-white">Low-Bandwidth Audio Lecture</h4>
@@ -511,7 +523,8 @@ This institutional framework was synthesized for African women entrepreneurs to 
                   <div className="bg-gradient-to-br from-[#16070E] to-[#250D18] rounded-3xl p-6 sm:p-8 border border-[#7F3D59]/40 space-y-4">
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-bold uppercase tracking-wider text-[#D4AF37] flex items-center gap-1.5">
-                        <span>🌍 Pan-African Case Study</span>
+                        <Globe className="w-3.5 h-3.5 text-[#D4AF37]" />
+                        <span>Pan-African Case Study</span>
                       </span>
                       {currentModule.caseStudy.country && (
                         <span className="text-xs font-mono text-gray-400 bg-black/40 px-2.5 py-0.5 rounded-full border border-white/10">
@@ -562,7 +575,8 @@ This institutional framework was synthesized for African women entrepreneurs to 
                       onClick={() => handleDownloadTemplate(currentModule.practicalTemplate)}
                       className="px-5 py-3 bg-[#7F3D59] hover:bg-[#5E2C41] text-white rounded-xl text-xs font-bold transition-all shadow-md shrink-0 flex items-center gap-2"
                     >
-                      <span>📥 Download Practical Template</span>
+                      <Download className="w-4 h-4 text-white" />
+                      <span>Download Practical Template</span>
                     </button>
                   </div>
                 )}
@@ -572,7 +586,8 @@ This institutional framework was synthesized for African women entrepreneurs to 
                   <div className="bg-[#16070E] rounded-3xl p-6 sm:p-8 border border-[#3E1A29] space-y-6">
                     <div className="flex items-center justify-between pb-3 border-b border-[#3E1A29]">
                       <h4 className="text-base font-serif font-bold text-white flex items-center gap-2">
-                        <span>⚡ Module Competency Quick-Check</span>
+                        <Zap className="w-4 h-4 text-[#D4AF37]" />
+                        <span>Module Competency Quick-Check</span>
                       </h4>
                       <span className="text-xs text-gray-400 font-mono">
                         {currentModule.quiz.questions.length} Scenario Questions
@@ -642,7 +657,19 @@ This institutional framework was synthesized for African women entrepreneurs to 
                                   isCorrect ? "bg-emerald-950/60 border border-emerald-800 text-emerald-300" : "bg-red-950/60 border border-red-800 text-red-300"
                                 }`}
                               >
-                                <p className="font-bold mb-1">{isCorrect ? "✓ Correct!" : "✗ Review Rationale:"}</p>
+                                <div className="font-bold mb-1 flex items-center gap-1.5">
+                                  {isCorrect ? (
+                                    <>
+                                      <Check className="w-3.5 h-3.5 text-emerald-400" />
+                                      <span>Correct!</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <X className="w-3.5 h-3.5 text-red-400" />
+                                      <span>Review Rationale:</span>
+                                    </>
+                                  )}
+                                </div>
                                 <p className="text-gray-300">{q.explanation}</p>
                               </div>
                             )}
@@ -709,9 +736,10 @@ This institutional framework was synthesized for African women entrepreneurs to 
               </div>
               <button
                 onClick={() => setIsSidebarOpen(false)}
-                className="text-gray-400 hover:text-white text-sm"
+                className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-white/10"
+                aria-label="Close reviewer drawer"
               >
-                ✕
+                <X className="w-4 h-4" />
               </button>
             </div>
 

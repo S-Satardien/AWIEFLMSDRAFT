@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import { Check, ShieldCheck, AlertTriangle } from "@/components/Icons";
 
 export const dynamic = "force-dynamic";
 
@@ -38,7 +39,8 @@ export default async function CertificateVerifyPage(props: {
           {certificate ? (
             <>
               <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs font-extrabold uppercase tracking-wider">
-                <span>✓</span> Authenticated Official AWIEF Credential
+                <Check className="w-3.5 h-3.5 text-emerald-700" />
+                <span>Authenticated Official AWIEF Credential</span>
               </div>
 
               <div className="space-y-2">
@@ -106,8 +108,9 @@ export default async function CertificateVerifyPage(props: {
                 </div>
 
                 <div className="pt-3 border-t border-[#EAD7E0] flex items-center justify-between text-[11px] text-gray-500">
-                  <span className="flex items-center gap-1 text-emerald-700 font-semibold">
-                    <span>🛡 Cryptographic Hash Verified</span>
+                  <span className="flex items-center gap-1.5 text-emerald-700 font-semibold">
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-700" />
+                    <span>Cryptographic Hash Verified</span>
                   </span>
                   <span>UN ECOSOC Accredited</span>
                 </div>
@@ -131,7 +134,8 @@ export default async function CertificateVerifyPage(props: {
           ) : (
             <>
               <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-red-100 border border-red-300 text-red-800 text-xs font-extrabold uppercase tracking-wider">
-                <span>⚠️</span> Credential Not Found
+                <AlertTriangle className="w-3.5 h-3.5 text-red-700" />
+                <span>Credential Not Found</span>
               </div>
 
               <div className="space-y-2">

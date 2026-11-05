@@ -25,6 +25,7 @@ export interface QuestionItem {
 
 export interface QuizItem {
   id: number;
+  courseId?: string | null;
   name: string;
   intro: string;
   questions: QuestionItem[];
@@ -80,12 +81,14 @@ async function syncQuizToDb(quiz: QuizItem) {
       update: {
         name: quiz.name,
         intro: quiz.intro,
+        courseId: quiz.courseId || null,
         questionsJson: JSON.stringify(quiz.questions),
       },
       create: {
         quizKey: quiz.id.toString(),
         name: quiz.name,
         intro: quiz.intro,
+        courseId: quiz.courseId || null,
         questionsJson: JSON.stringify(quiz.questions),
       },
     });
@@ -96,13 +99,17 @@ async function syncQuizToDb(quiz: QuizItem) {
 
 /**
  * Fetches all quizzes with their full questions and answers.
- * Checks DB first; if empty, seeds from JSON file.
+ * Optionally filters by courseId if specified.
  */
-export async function getQuizzesForManagement(): Promise<QuizItem[]> {
+export async function getQuizzesForManagement(courseId?: string): Promise<QuizItem[]> {
   await verifyAdminRole();
 
   try {
-    const dbQuizzes = await prisma.quiz.findMany();
+    const whereClause = courseId && courseId !== "ALL" ? { courseId } : {};
+    const dbQuizzes = await prisma.quiz.findMany({
+      where: whereClause,
+      orderBy: { id: "asc" }
+    });
     if (dbQuizzes.length > 0) {
       return dbQuizzes.map((q) => {
         let questions: QuestionItem[] = [];
@@ -112,7 +119,8 @@ export async function getQuizzesForManagement(): Promise<QuizItem[]> {
           questions = [];
         }
         return {
-          id: parseInt(q.quizKey, 10) || 1,
+          id: parseInt(q.quizKey, 10) || q.id,
+          courseId: q.courseId,
           name: q.name,
           intro: q.intro,
           questions,
@@ -128,13 +136,15 @@ export async function getQuizzesForManagement(): Promise<QuizItem[]> {
   for (const q of fileQuizzes) {
     await syncQuizToDb(q);
   }
-  return fileQuizzes;
+  return courseId && courseId !== "ALL"
+    ? fileQuizzes.filter((q) => q.courseId === courseId)
+    : fileQuizzes;
 }
 
 /**
- * Updates quiz title or description/intro.
+ * Updates quiz title, description, or assigned course.
  */
-export async function updateQuizMetadata(quizId: number, data: { name: string; intro?: string }): Promise<QuizItem> {
+export async function updateQuizMetadata(quizId: number, data: { name: string; intro?: string; courseId?: string | null }): Promise<QuizItem> {
   await verifyAdminRole();
 
   if (!data.name || !data.name.trim()) {
@@ -149,6 +159,9 @@ export async function updateQuizMetadata(quizId: number, data: { name: string; i
 
   quizzes[quizIndex].name = data.name.trim();
   quizzes[quizIndex].intro = data.intro !== undefined ? data.intro.trim() : quizzes[quizIndex].intro;
+  if (data.courseId !== undefined) {
+    quizzes[quizIndex].courseId = data.courseId;
+  }
 
   await syncQuizToDb(quizzes[quizIndex]);
   tryWriteQuizzesFile(quizzes);
@@ -156,9 +169,9 @@ export async function updateQuizMetadata(quizId: number, data: { name: string; i
 }
 
 /**
- * Creates a new quiz while preserving existing quiz IDs.
+ * Creates a new quiz while preserving existing quiz IDs and linking to a course.
  */
-export async function createNewQuiz(data: { name: string; intro?: string }): Promise<QuizItem> {
+export async function createNewQuiz(data: { name: string; intro?: string; courseId?: string | null }): Promise<QuizItem> {
   await verifyAdminRole();
 
   if (!data.name || !data.name.trim()) {
@@ -171,6 +184,7 @@ export async function createNewQuiz(data: { name: string; intro?: string }): Pro
 
   const newQuiz: QuizItem = {
     id: newId,
+    courseId: data.courseId || null,
     name: data.name.trim(),
     intro: data.intro ? data.intro.trim() : "",
     questions: []

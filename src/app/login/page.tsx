@@ -6,6 +6,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { checkUserEligibility, setupInitialPassword, resetUserPassword } from "./actions";
+import { Sparkles } from "lucide-react";
 
 /**
  * Authentication login, password reset, and activation portal for AWIEF Academy.
@@ -250,7 +251,8 @@ export default function LoginPage() {
         <div className="bg-gradient-to-br from-[#1D0B14] to-[#3E1A29] p-5 rounded-3xl shadow-xl border border-[#D4AF37]/30 text-white space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold uppercase tracking-wider text-[#D4AF37] flex items-center gap-1.5">
-              <span>★ 1-Click J&amp;J Reviewer Demo Logins</span>
+              <Sparkles className="w-3.5 h-3.5 text-[#D4AF37]" />
+              <span>1-Click J&amp;J Reviewer Demo Logins</span>
             </span>
             <span className="text-[10px] text-gray-400 font-mono">No typing required</span>
           </div>

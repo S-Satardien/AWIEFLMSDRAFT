@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { prisma } from "@/lib/prisma";
+import { Award, Check } from "@/components/Icons";
 
 export const dynamic = "force-dynamic";
 
@@ -46,7 +47,8 @@ export default async function HomePage() {
             <div className="lg:col-span-7 space-y-6 text-center lg:text-left">
               <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#7F3D59]/10 border border-[#7F3D59]/25 text-[#7F3D59] text-xs font-bold uppercase tracking-wider">
                 <span className="w-2 h-2 rounded-full bg-[#D4AF37] animate-ping"></span>
-                <span>★ UN ECOSOC Consultative Status • Official AWIEF Academy</span>
+                <Award className="w-3.5 h-3.5 text-[#D4AF37]" />
+                <span>UN ECOSOC Consultative Status • Official AWIEF Academy</span>
               </div>
               
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-serif font-extrabold text-[#1D0B14] tracking-tight leading-[1.12]">
@@ -456,13 +458,13 @@ export default async function HomePage() {
                 </p>
                 <div className="flex flex-wrap gap-4 pt-2 text-xs text-gray-200">
                   <span className="flex items-center gap-1.5 bg-black/20 px-3 py-1.5 rounded-lg">
-                    <span className="text-[#D4AF37]">✓</span> White-label cohort management
+                    <Check className="w-3.5 h-3.5 text-[#D4AF37]" /> White-label cohort management
                   </span>
                   <span className="flex items-center gap-1.5 bg-black/20 px-3 py-1.5 rounded-lg">
-                    <span className="text-[#D4AF37]">✓</span> Live royalty and statement engine
+                    <Check className="w-3.5 h-3.5 text-[#D4AF37]" /> Live royalty and statement engine
                   </span>
                   <span className="flex items-center gap-1.5 bg-black/20 px-3 py-1.5 rounded-lg">
-                    <span className="text-[#D4AF37]">✓</span> Automated CSV / JSON data exports
+                    <Check className="w-3.5 h-3.5 text-[#D4AF37]" /> Automated CSV / JSON data exports
                   </span>
                 </div>
               </div>

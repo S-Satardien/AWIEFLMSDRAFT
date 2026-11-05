@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { Check, Link as LinkIcon, ShieldCheck, Printer } from "lucide-react";
 
 /**
  * Certificate Action Header Bar providing quick access to:
@@ -47,7 +48,17 @@ export default function CertificateActions({
           onClick={handleCopyLink}
           className="px-3.5 py-2 bg-white text-gray-700 hover:bg-gray-50 border border-gray-300 rounded-xl text-xs font-bold transition-all shadow-sm inline-flex items-center gap-1.5"
         >
-          <span>{copied ? "✓ Verification Link Copied" : "🔗 Copy Verification Link"}</span>
+          {copied ? (
+            <>
+              <Check className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Verification Link Copied</span>
+            </>
+          ) : (
+            <>
+              <LinkIcon className="w-3.5 h-3.5 text-gray-500" />
+              <span>Copy Verification Link</span>
+            </>
+          )}
         </button>
 
         <Link
@@ -55,7 +66,8 @@ export default function CertificateActions({
           target="_blank"
           className="px-3.5 py-2 bg-white text-gray-700 hover:bg-gray-50 border border-gray-300 rounded-xl text-xs font-bold transition-all shadow-sm inline-flex items-center gap-1.5"
         >
-          <span>🛡 Verify in Public Registry</span>
+          <ShieldCheck className="w-3.5 h-3.5 text-[#7F3D59]" />
+          <span>Verify in Public Registry</span>
           <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
           </svg>

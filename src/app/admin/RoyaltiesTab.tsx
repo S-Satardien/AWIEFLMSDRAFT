@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { Download, Printer, X } from "lucide-react";
 
 interface TransactionItem {
   id: string;
@@ -266,7 +267,8 @@ export default function RoyaltiesTab({ transactions, courses }: RoyaltiesTabProp
             onClick={handleExportCSV}
             className="px-4 py-2.5 bg-[#7F3D59] hover:bg-[#5E2C41] text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5"
           >
-            <span>📥 Export Monthly CSV Statement</span>
+            <Download className="w-3.5 h-3.5" />
+            <span>Export Monthly CSV Statement</span>
           </button>
         </div>
       </div>
@@ -331,9 +333,10 @@ export default function RoyaltiesTab({ transactions, courses }: RoyaltiesTabProp
                     <button
                       type="button"
                       onClick={() => setActiveStatementCourse(item)}
-                      className="px-3 py-1.5 bg-[#FDF8F9] hover:bg-[#EAD7E0] text-[#7F3D59] rounded-lg border border-[#7F3D59]/30 font-bold text-[11px] transition-colors"
+                      className="px-3 py-1.5 bg-[#FDF8F9] hover:bg-[#EAD7E0] text-[#7F3D59] rounded-lg border border-[#7F3D59]/30 font-bold text-[11px] transition-colors inline-flex items-center gap-1.5"
                     >
-                      Print Statement 🖨
+                      <Printer className="w-3.5 h-3.5" />
+                      <span>Print Statement</span>
                     </button>
                   </td>
                 </tr>
@@ -432,16 +435,18 @@ export default function RoyaltiesTab({ transactions, courses }: RoyaltiesTabProp
                   <button
                     type="button"
                     onClick={() => window.print()}
-                    className="px-4 py-1.5 bg-[#7F3D59] hover:bg-[#5E2C41] text-white rounded-lg text-xs font-bold transition-all"
+                    className="px-4 py-1.5 bg-[#7F3D59] hover:bg-[#5E2C41] text-white rounded-lg text-xs font-bold transition-all inline-flex items-center gap-1.5"
                   >
-                    Print or Save PDF 🖨
+                    <Printer className="w-3.5 h-3.5" />
+                    <span>Print or Save PDF</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setActiveStatementCourse(null)}
-                    className="text-gray-400 hover:text-gray-800 text-sm ml-2"
+                    className="text-gray-400 hover:text-gray-800 p-1 rounded-lg hover:bg-gray-100 ml-2"
+                    aria-label="Close statement modal"
                   >
-                    ✕
+                    <X className="w-4 h-4" />
                   </button>
                 </div>
               </div>

@@ -5,6 +5,7 @@ import Link from "next/link";
 import Confetti from "react-confetti";
 import { getDashboardData, getLeaderboard } from "./actions";
 import { COUNTRIES } from "@/lib/countries";
+import { Sparkles, Award } from "lucide-react";
 
 /**
  * Learner dashboard client component for the AWIEF Digital Learning Academy.
@@ -94,7 +95,8 @@ export default function DashboardClient() {
 
         <div className="z-10 space-y-3 max-w-2xl">
           <div className="inline-flex items-center gap-2 px-3 py-1 bg-[#7F3D59]/10 border border-[#7F3D59]/20 rounded-full text-[#7F3D59] text-xs font-bold uppercase tracking-wider">
-            <span>★ Pan-African Founder Workspace</span>
+            <Sparkles className="w-3.5 h-3.5 text-[#7F3D59]" />
+            <span>Pan-African Founder Workspace</span>
           </div>
           <h1 className="text-3xl sm:text-4xl font-serif font-extrabold text-[#1D0B14] tracking-tight">
             Welcome back, {data.userName}
@@ -240,9 +242,10 @@ export default function DashboardClient() {
                       {course.certificateNumber && (
                         <Link
                           href={`/certificate/${course.id}`}
-                          className="px-4 py-2 bg-[#7F3D59] hover:bg-[#5E2C41] text-white rounded-xl text-xs font-bold transition-all shadow-sm text-center w-full sm:w-auto"
+                          className="px-4 py-2 bg-[#7F3D59] hover:bg-[#5E2C41] text-white rounded-xl text-xs font-bold transition-all shadow-sm text-center w-full sm:w-auto inline-flex items-center justify-center gap-1.5"
                         >
-                          ★ View QR Certificate
+                          <Award className="w-3.5 h-3.5 text-[#D4AF37]" />
+                          <span>View QR Certificate</span>
                         </Link>
                       )}
                     </div>

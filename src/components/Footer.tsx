@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { Award, ShieldCheck } from "@/components/Icons";
 
 /**
  * Global application footer presenting AWIEF organizational identity,
@@ -27,7 +30,8 @@ export default function Footer() {
             </p>
             <div className="pt-2">
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-[#7F3D59]/50 text-[#D4AF37] border border-[#D4AF37]/30">
-                ★ UN ECOSOC Special Consultative Status
+                <Award className="w-3.5 h-3.5 text-[#D4AF37]" />
+                UN ECOSOC Special Consultative Status
               </span>
             </div>
           </div>
@@ -85,8 +89,9 @@ export default function Footer() {
                 <span className="text-[#D4AF37] font-semibold">4. IMPACT:</span> Policy & AfCFTA Advocacy
               </li>
               <li className="pt-2">
-                <Link href="/verify/sample" className="text-xs text-gray-400 hover:text-[#D4AF37] transition-colors flex items-center gap-1">
-                  <span>🛡 Verifiable Credential Verification Portal</span>
+                <Link href="/verify/CERT-AWIEF-2026-INV-DEMO1" className="text-xs text-gray-400 hover:text-[#D4AF37] transition-colors flex items-center gap-1.5">
+                  <ShieldCheck className="w-3.5 h-3.5 text-[#D4AF37]" />
+                  <span>Verifiable Credential Verification Portal</span>
                 </Link>
               </li>
             </ul>

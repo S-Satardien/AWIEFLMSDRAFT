@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import CheckoutModal from "./CheckoutModal";
+import { Zap, Package, Award, Check, BookOpen, Download } from "lucide-react";
 
 interface ModuleData {
   id: string;
@@ -130,16 +131,19 @@ export default function CourseOverviewClient({
                 {course.duration || "Self-Paced"}
               </span>
               {course.isNative ? (
-                <span className="px-3 py-1 bg-amber-50 text-amber-800 border border-amber-200 text-xs font-semibold rounded-full">
-                  ⚡ Native Bite-Sized Modules (20-30m)
+                <span className="px-3 py-1 bg-amber-50 text-amber-800 border border-amber-200 text-xs font-semibold rounded-full flex items-center gap-1.5">
+                  <Zap className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Native Bite-Sized Modules (20-30m)</span>
                 </span>
               ) : (
-                <span className="px-3 py-1 bg-purple-50 text-purple-800 border border-purple-200 text-xs font-semibold rounded-full">
-                  📦 SCORM 1.2 / 2004 Interactive Package
+                <span className="px-3 py-1 bg-purple-50 text-purple-800 border border-purple-200 text-xs font-semibold rounded-full flex items-center gap-1.5">
+                  <Package className="w-3.5 h-3.5 text-purple-600" />
+                  <span>SCORM 1.2 / 2004 Interactive Package</span>
                 </span>
               )}
-              <span className="px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-semibold rounded-full">
-                ★ Verifiable QR Certificate Included
+              <span className="px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-semibold rounded-full flex items-center gap-1.5">
+                <Award className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Verifiable QR Certificate Included</span>
               </span>
             </div>
 
@@ -168,8 +172,9 @@ export default function CourseOverviewClient({
 
             {isEnrolled ? (
               <div className="space-y-3">
-                <div className="px-4 py-2 bg-emerald-50 text-emerald-800 font-bold text-sm rounded-xl border border-emerald-200 inline-block">
-                  ✓ Active Enrollment Confirmed
+                <div className="px-4 py-2 bg-emerald-50 text-emerald-800 font-bold text-sm rounded-xl border border-emerald-200 inline-flex items-center gap-1.5">
+                  <Check className="w-4 h-4 text-emerald-600" />
+                  <span>Active Enrollment Confirmed</span>
                 </div>
                 <Link
                   href={`/course/${course.id}`}
@@ -276,14 +281,16 @@ export default function CourseOverviewClient({
 
                     <div className="pt-3 border-t border-gray-200/60 flex flex-wrap gap-4 text-xs">
                       {mod.caseStudy && (
-                        <span className="text-[#7F3D59] font-medium flex items-center gap-1">
-                          <span>📖 Case Study:</span>
+                        <span className="text-[#7F3D59] font-medium flex items-center gap-1.5">
+                          <BookOpen className="w-3.5 h-3.5 text-[#7F3D59]" />
+                          <span>Case Study:</span>
                           <span className="font-semibold">{mod.caseStudy.title}</span>
                         </span>
                       )}
                       {mod.practicalTemplate && (
-                        <span className="text-emerald-700 font-medium flex items-center gap-1">
-                          <span>📥 Template:</span>
+                        <span className="text-emerald-700 font-medium flex items-center gap-1.5">
+                          <Download className="w-3.5 h-3.5 text-emerald-700" />
+                          <span>Template:</span>
                           <span className="font-semibold">{mod.practicalTemplate.title} ({mod.practicalTemplate.format})</span>
                         </span>
                       )}
@@ -343,8 +350,8 @@ export default function CourseOverviewClient({
 
           {/* Verifiable QR Certificate Info */}
           <div className="bg-gradient-to-br from-[#1D0B14] to-[#3E1A29] text-white rounded-3xl p-8 shadow-md space-y-4 relative overflow-hidden">
-            <div className="w-10 h-10 rounded-xl bg-white/10 border border-[#D4AF37]/40 text-[#D4AF37] flex items-center justify-center text-xs font-bold mb-2">
-              ★
+            <div className="w-10 h-10 rounded-xl bg-white/10 border border-[#D4AF37]/40 text-[#D4AF37] flex items-center justify-center mb-2">
+              <Award className="w-5 h-5 text-[#D4AF37]" />
             </div>
             <h3 className="text-xl font-serif font-bold text-white">Verifiable QR Digital Credential</h3>
             <p className="text-xs text-gray-300 leading-relaxed">

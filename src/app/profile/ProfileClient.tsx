@@ -4,6 +4,7 @@ import { useState } from "react";
 import { changePassword, updateProfile } from "./actions";
 import { motion } from "framer-motion";
 import { COUNTRIES } from "@/lib/countries";
+import { Sparkles, Lock } from "lucide-react";
 
 /**
  * Profile management client component for AWIEF Academy learners.
@@ -91,7 +92,7 @@ export default function ProfileClient({ user }: { user: any }) {
         {/* Profile Settings Section */}
         <div className="p-8 border-b border-gray-100">
           <h3 className="text-lg font-serif font-bold text-gray-900 mb-6 flex items-center">
-            <span className="mr-2 text-[#7F3D59]">★</span>
+            <Sparkles className="w-5 h-5 mr-2 text-[#D4AF37]" />
             Executive Identity &amp; Leaderboard Settings
           </h3>
 
@@ -123,7 +124,7 @@ export default function ProfileClient({ user }: { user: any }) {
                 >
                   <option value="">Select a country...</option>
                   {COUNTRIES.map(c => (
-                    <option key={c.code} value={c.code}>{c.flag} {c.name}</option>
+                    <option key={c.code} value={c.code}>[{c.code}] {c.name}</option>
                   ))}
                 </select>
               </div>
@@ -160,7 +161,7 @@ export default function ProfileClient({ user }: { user: any }) {
         {/* Change Password Section */}
         <div className="p-8">
           <h3 className="text-lg font-serif font-bold text-gray-900 mb-6 flex items-center">
-            <span className="mr-2 text-gray-400">🔒</span>
+            <Lock className="w-5 h-5 mr-2 text-gray-400" />
             Update Security Credentials
           </h3>
 

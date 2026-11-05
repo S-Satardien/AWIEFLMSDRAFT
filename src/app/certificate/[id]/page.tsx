@@ -7,6 +7,7 @@ import crypto from "crypto";
 import CertificateActions from "./CertificateActions";
 import DashboardNav from "@/app/dashboard/Nav";
 import Footer from "@/components/Footer";
+import { Award, Check } from "@/components/Icons";
 
 export const dynamic = "force-dynamic";
 
@@ -61,8 +62,8 @@ export default async function CertificatePage(props: {
 
         <main className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-16 flex-1 w-full">
           <div className="bg-white rounded-3xl shadow-xl border border-[#EAD7E0] p-8 sm:p-12 text-center space-y-8">
-            <div className="w-16 h-16 bg-amber-50 border border-amber-200 text-[#D4AF37] rounded-2xl flex items-center justify-center mx-auto text-2xl font-bold">
-              ★
+            <div className="w-16 h-16 bg-amber-50 border border-amber-200 text-[#D4AF37] rounded-2xl flex items-center justify-center mx-auto">
+              <Award className="w-8 h-8 text-[#D4AF37]" />
             </div>
 
             <div className="space-y-2">
@@ -79,7 +80,7 @@ export default async function CertificatePage(props: {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${isCourseComplete ? "bg-emerald-100 text-emerald-800" : "bg-gray-200 text-gray-600"}`}>
-                    {isCourseComplete ? "✓" : "1"}
+                    {isCourseComplete ? <Check className="w-3.5 h-3.5 text-emerald-700" /> : "1"}
                   </div>
                   <div>
                     <p className="text-sm font-bold text-gray-900">Bite-Sized Modules (100%)</p>
@@ -94,7 +95,7 @@ export default async function CertificatePage(props: {
               <div className="flex items-center justify-between pt-3 border-t border-gray-200">
                 <div className="flex items-center gap-3">
                   <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${isSurveyComplete ? "bg-emerald-100 text-emerald-800" : "bg-gray-200 text-gray-600"}`}>
-                    {isSurveyComplete ? "✓" : "2"}
+                    {isSurveyComplete ? <Check className="w-3.5 h-3.5 text-emerald-700" /> : "2"}
                   </div>
                   <div>
                     <p className="text-sm font-bold text-gray-900">Executive Evaluation Survey</p>
@@ -211,8 +212,9 @@ export default async function CertificatePage(props: {
             <h3 className="text-xs sm:text-sm font-extrabold uppercase tracking-[0.22em] text-[#7F3D59]">
               Africa Women Innovation &amp; Entrepreneurship Forum (AWIEF)
             </h3>
-            <p className="text-[11px] sm:text-xs font-semibold text-[#D4AF37] uppercase tracking-widest">
-              ★ Special Consultative Status with the United Nations ECOSOC
+            <p className="text-[11px] sm:text-xs font-semibold text-[#D4AF37] uppercase tracking-widest flex items-center justify-center gap-1.5">
+              <Award className="w-3.5 h-3.5 text-[#D4AF37]" />
+              <span>Special Consultative Status with the United Nations ECOSOC</span>
             </p>
           </div>
 

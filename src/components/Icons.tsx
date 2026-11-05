@@ -1,0 +1,50 @@
+"use client";
+
+/**
+ * Client-boundary wrapper for Lucide icons.
+ * Isolates lucide-react context within the React client runtime,
+ * allowing icons to be rendered safely inside both Server Components and Client Components
+ * in Next.js Turbopack without RSC createContext evaluation failures.
+ */
+export {
+  Award,
+  Check,
+  CheckCircle,
+  CheckCircle2,
+  CircleDollarSign,
+  BookOpen,
+  GraduationCap,
+  Users,
+  MessageSquareCheck,
+  Plus,
+  Pencil,
+  Trash2,
+  HelpCircle,
+  X,
+  Download,
+  Printer,
+  ExternalLink,
+  ShieldCheck,
+  AlertTriangle,
+  Sparkles,
+  Lock,
+  CreditCard,
+  Globe,
+  Smartphone,
+  Zap,
+  Package,
+  Wifi,
+  Link as LinkIcon,
+  Mic,
+  Gift,
+  TrendingUp,
+  Calendar,
+  Layers,
+  Search,
+  FileText,
+  BarChart3,
+  ChevronDown,
+  ChevronRight,
+  PlayCircle,
+  ArrowRight,
+} from "lucide-react";

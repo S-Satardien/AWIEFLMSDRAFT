@@ -5,6 +5,7 @@ import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import DashboardNav from "@/app/dashboard/Nav";
 import Footer from "@/components/Footer";
+import { Award, CreditCard, Globe, Smartphone, Zap, Package, Wifi, Check } from "@/components/Icons";
 
 export const dynamic = "force-dynamic";
 
@@ -44,7 +45,8 @@ export default async function CatalogPage() {
 
           <div className="max-w-3xl relative z-10 space-y-4">
             <div className="inline-flex items-center gap-2 px-3 py-1 bg-[#7F3D59]/10 border border-[#7F3D59]/25 rounded-full text-[#7F3D59] text-xs font-bold uppercase tracking-wider">
-              <span>★ Pan-African Enterprise Curriculum</span>
+              <Award className="w-3.5 h-3.5 text-[#D4AF37]" />
+              <span>Pan-African Enterprise Curriculum</span>
             </div>
             <h1 className="text-3xl sm:text-4xl font-serif font-extrabold text-[#1D0B14] tracking-tight">
               Masterclasses &amp; Enterprise Programmes
@@ -53,14 +55,14 @@ export default async function CatalogPage() {
               Designed by leading African business practitioners, angel syndicate principals, and trade experts. Master the critical growth competencies required to attract institutional capital, scale cross-border under AfCFTA, and protect operational cashflow.
             </p>
             <div className="pt-2 flex flex-wrap gap-2 text-xs text-gray-600">
-              <span className="bg-[#FDF8F9] px-3 py-1 rounded-full border border-gray-200">
-                💳 PayFast (ZAR Cards &amp; Instant EFT)
+              <span className="bg-[#FDF8F9] px-3 py-1 rounded-full border border-gray-200 flex items-center gap-1.5">
+                <CreditCard className="w-3.5 h-3.5 text-[#7F3D59]" /> PayFast (ZAR Cards &amp; Instant EFT)
               </span>
-              <span className="bg-[#FDF8F9] px-3 py-1 rounded-full border border-gray-200">
-                🌍 PayPal (USD)
+              <span className="bg-[#FDF8F9] px-3 py-1 rounded-full border border-gray-200 flex items-center gap-1.5">
+                <Globe className="w-3.5 h-3.5 text-blue-600" /> PayPal (USD)
               </span>
-              <span className="bg-[#FDF8F9] px-3 py-1 rounded-full border border-gray-200">
-                📱 Paystack &amp; M-Pesa / Mobile Money
+              <span className="bg-[#FDF8F9] px-3 py-1 rounded-full border border-gray-200 flex items-center gap-1.5">
+                <Smartphone className="w-3.5 h-3.5 text-emerald-600" /> Paystack &amp; M-Pesa / Mobile Money
               </span>
             </div>
           </div>
@@ -117,15 +119,18 @@ export default async function CatalogPage() {
                   <div className="flex items-center gap-3 text-xs">
                     {course.isNative ? (
                       <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-amber-50 text-amber-800 border border-amber-200 font-medium">
-                        <span>⚡ Native Bite-Sized Modules (20-30m each)</span>
+                        <Zap className="w-3.5 h-3.5 text-amber-600" />
+                        <span>Native Bite-Sized Modules (20-30m each)</span>
                       </span>
                     ) : (
                       <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-purple-50 text-purple-800 border border-purple-200 font-medium">
-                        <span>📦 SCORM 1.2 / 2004 Interactive E-Learning</span>
+                        <Package className="w-3.5 h-3.5 text-purple-600" />
+                        <span>SCORM 1.2 / 2004 Interactive E-Learning</span>
                       </span>
                     )}
-                    <span className="inline-flex items-center gap-1 text-gray-500">
-                      <span>📶 Low-Bandwidth Mode</span>
+                    <span className="inline-flex items-center gap-1.5 text-gray-500">
+                      <Wifi className="w-3.5 h-3.5 text-gray-400" />
+                      <span>Low-Bandwidth Mode</span>
                     </span>
                   </div>
 
@@ -154,7 +159,7 @@ export default async function CatalogPage() {
                       <ul className="space-y-1.5 text-xs text-gray-600">
                         {objectives.slice(0, 3).map((obj, i) => (
                           <li key={i} className="flex items-start gap-2">
-                            <span className="text-[#D4AF37] font-bold">✓</span>
+                            <Check className="w-3.5 h-3.5 text-[#D4AF37] shrink-0 mt-0.5" />
                             <span className="line-clamp-1">{obj}</span>
                           </li>
                         ))}

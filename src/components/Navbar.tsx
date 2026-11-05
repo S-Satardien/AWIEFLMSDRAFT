@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { ShieldCheck } from "lucide-react";
 
 export default function Navbar() {
   const { data: session } = useSession();
@@ -43,8 +44,9 @@ export default function Navbar() {
           <Link href="/#pillars" className="hover:text-awief-plum transition-colors">
             Four Pillars
           </Link>
-          <Link href="/verify/CERT-AWIEF-2026-INV-DEMO1" className="hover:text-awief-plum transition-colors flex items-center gap-1 text-xs px-2.5 py-1 bg-amber-50 text-amber-900 border border-amber-200 rounded-full font-bold">
-            <span>🛡️</span> Verify Credential
+          <Link href="/verify/CERT-AWIEF-2026-INV-DEMO1" className="hover:text-awief-plum transition-colors flex items-center gap-1.5 text-xs px-2.5 py-1 bg-amber-50 text-amber-900 border border-amber-200 rounded-full font-bold">
+            <ShieldCheck className="w-3.5 h-3.5 text-amber-700" />
+            Verify Credential
           </Link>
         </nav>
 

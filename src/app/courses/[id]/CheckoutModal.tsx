@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { processCourseCheckout } from "./actions";
+import { X, CreditCard, Globe, Smartphone, Gift, ShieldCheck } from "lucide-react";
 
 interface CheckoutModalProps {
   course: {
@@ -125,10 +126,10 @@ export default function CheckoutModal({ course, isOpen, onClose, userEmail }: Ch
           <div className="bg-[#1D0B14] p-6 text-white relative">
             <button
               onClick={onClose}
-              className="absolute top-5 right-5 text-gray-400 hover:text-white transition-colors text-lg"
+              className="absolute top-5 right-5 text-gray-400 hover:text-white transition-colors p-1 rounded-lg hover:bg-white/10"
               aria-label="Close"
             >
-              ✕
+              <X className="w-5 h-5" />
             </button>
             <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[#D4AF37] mb-1">
               <span>AWIEF Commercial Checkout &amp; Settlement</span>
