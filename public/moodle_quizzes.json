@@ -1,0 +1,296 @@
+[
+  {
+    "id": 1,
+    "name": "Investment Readiness & Valuation Essentials",
+    "intro": "Evaluate your readiness on cap table management, post-money valuation, SAFE notes, and due diligence.",
+    "questions": [
+      {
+        "id": 101,
+        "qtype": "multichoice",
+        "name": "Question 1",
+        "questiontext": "<p>What is the key advantage of a SAFE (Simple Agreement for Future Equity) note over traditional priced equity for an early-stage round?</p>",
+        "answers": [
+          {
+            "id": 1001,
+            "text": "It defers formal corporate valuation negotiations until a qualified priced round occurs.",
+            "isCorrect": true
+          },
+          {
+            "id": 1002,
+            "text": "It requires immediate repayment with commercial interest within 12 months.",
+            "isCorrect": false
+          },
+          {
+            "id": 1003,
+            "text": "It transfers 51% board voting control immediately to the investor.",
+            "isCorrect": false
+          },
+          {
+            "id": 1004,
+            "text": "It exempts the company from local corporate tax filings.",
+            "isCorrect": false
+          }
+        ]
+      },
+      {
+        "id": 102,
+        "qtype": "multichoice",
+        "name": "Question 2",
+        "questiontext": "<p>If an investor invests $100,000 on a $900,000 pre-money valuation, what percentage of equity will the investor own post-money?</p>",
+        "answers": [
+          {
+            "id": 1005,
+            "text": "10.0%",
+            "isCorrect": true
+          },
+          {
+            "id": 1006,
+            "text": "11.1%",
+            "isCorrect": false
+          },
+          {
+            "id": 1007,
+            "text": "9.0%",
+            "isCorrect": false
+          },
+          {
+            "id": 1008,
+            "text": "15.0%",
+            "isCorrect": false
+          }
+        ]
+      },
+      {
+        "id": 103,
+        "qtype": "multichoice",
+        "name": "Question 3",
+        "questiontext": "<p>Why do tier-1 gender-lens investors prioritize clear founder vesting schedules (e.g., 4-year vesting with a 1-year cliff)?</p>",
+        "answers": [
+          {
+            "id": 1009,
+            "text": "To ensure key founders remain committed to growing enterprise value over a sustainable time horizon.",
+            "isCorrect": true
+          },
+          {
+            "id": 1010,
+            "text": "To force founders to forfeit all salaries.",
+            "isCorrect": false
+          },
+          {
+            "id": 1011,
+            "text": "To automatically transfer shares to government regulators.",
+            "isCorrect": false
+          },
+          {
+            "id": 1012,
+            "text": "To avoid annual financial audits.",
+            "isCorrect": false
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 2,
+    "name": "AfCFTA Cross-Border Trade & Customs Compliance",
+    "intro": "Test your understanding of Rules of Origin, tariff lines, non-tariff barriers, and regional customs.",
+    "questions": [
+      {
+        "id": 201,
+        "qtype": "multichoice",
+        "name": "Question 1",
+        "questiontext": "<p>Under the AfCFTA Agreement, what is the primary role of the Certificate of Origin?</p>",
+        "answers": [
+          {
+            "id": 2001,
+            "text": "To prove goods were wholly obtained or substantially transformed in an African state to qualify for preferential duty rates.",
+            "isCorrect": true
+          },
+          {
+            "id": 2002,
+            "text": "To replace commercial flight insurance.",
+            "isCorrect": false
+          },
+          {
+            "id": 2003,
+            "text": "To serve as a personal travel passport for corporate directors.",
+            "isCorrect": false
+          },
+          {
+            "id": 2004,
+            "text": "To mandate that all invoices be denominated exclusively in USD.",
+            "isCorrect": false
+          }
+        ]
+      },
+      {
+        "id": 202,
+        "qtype": "multichoice",
+        "name": "Question 2",
+        "questiontext": "<p>Which pan-African platform enables cross-border payments in local African currencies without passing through offshore correspondent banks?</p>",
+        "answers": [
+          {
+            "id": 2005,
+            "text": "Pan-African Payment and Settlement System (PAPSS)",
+            "isCorrect": true
+          },
+          {
+            "id": 2006,
+            "text": "SWIFT Eurozone Clearing",
+            "isCorrect": false
+          },
+          {
+            "id": 2007,
+            "text": "Federal Reserve Wire Network",
+            "isCorrect": false
+          },
+          {
+            "id": 2008,
+            "text": "Euroclear Clearinghouse",
+            "isCorrect": false
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 3,
+    "name": "Financial Ratios, Unit Economics & Cashflow Runway",
+    "intro": "Evaluate your ability to calculate gross margins, CAC:LTV, and rolling cash runway.",
+    "questions": [
+      {
+        "id": 301,
+        "qtype": "multichoice",
+        "name": "Question 1",
+        "questiontext": "<p>What is a healthy Customer Lifetime Value to Customer Acquisition Cost (LTV:CAC) benchmark for a scalable business?</p>",
+        "answers": [
+          {
+            "id": 3001,
+            "text": "At least 3:1 (LTV is three times CAC)",
+            "isCorrect": true
+          },
+          {
+            "id": 3002,
+            "text": "1:3 (CAC is three times LTV)",
+            "isCorrect": false
+          },
+          {
+            "id": 3003,
+            "text": "1:1 (Breakeven per customer)",
+            "isCorrect": false
+          },
+          {
+            "id": 3004,
+            "text": "Negative 2:1",
+            "isCorrect": false
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 4,
+    "name": "Customer Acquisition, Digital Funnels & Pitch Mastery",
+    "intro": "Assess customer retention, digital channels, and pitch structure.",
+    "questions": [
+      {
+        "id": 401,
+        "qtype": "multichoice",
+        "name": "Question 1",
+        "questiontext": "<p>What must the opening 30 seconds of an executive investor pitch primarily achieve?</p>",
+        "answers": [
+          {
+            "id": 4001,
+            "text": "Establish the painful market problem and your unique, defensible solution clearly.",
+            "isCorrect": true
+          },
+          {
+            "id": 4002,
+            "text": "Read through the entire team resume bullet by bullet.",
+            "isCorrect": false
+          },
+          {
+            "id": 4003,
+            "text": "List every line item in the office lease agreement.",
+            "isCorrect": false
+          },
+          {
+            "id": 4004,
+            "text": "Disclose confidential supplier bank account numbers.",
+            "isCorrect": false
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 5,
+    "name": "Governance, Board Structure & Legal Risk for SMEs",
+    "intro": "Master board committees, advisory boards, and shareholder agreements.",
+    "questions": [
+      {
+        "id": 501,
+        "qtype": "multichoice",
+        "name": "Question 1",
+        "questiontext": "<p>Why is an independent non-executive director critical for early growth stage SMEs?</p>",
+        "answers": [
+          {
+            "id": 5001,
+            "text": "They bring unbiased governance, industry connections, and objective oversight to protect all shareholders.",
+            "isCorrect": true
+          },
+          {
+            "id": 5002,
+            "text": "They take over daily operations from the founder.",
+            "isCorrect": false
+          },
+          {
+            "id": 5003,
+            "text": "They eliminate the requirement for corporate income tax payments.",
+            "isCorrect": false
+          },
+          {
+            "id": 5004,
+            "text": "They are legally prohibited from attending board meetings.",
+            "isCorrect": false
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 6,
+    "name": "ESG, Impact Measurement & Pan-African Supply Chains",
+    "intro": "Examine environmental sustainability, social inclusion metrics, and governance transparency.",
+    "questions": [
+      {
+        "id": 601,
+        "qtype": "multichoice",
+        "name": "Question 1",
+        "questiontext": "<p>How does verifiable impact reporting on female smallholder farmer inclusion enhance DFI grant and concessional debt eligibility?</p>",
+        "answers": [
+          {
+            "id": 6001,
+            "text": "It validates gender-lens impact metrics required by development finance institutions such as AfDB and IFC.",
+            "isCorrect": true
+          },
+          {
+            "id": 6002,
+            "text": "It automatically eliminates all transport costs.",
+            "isCorrect": false
+          },
+          {
+            "id": 6003,
+            "text": "It replaces commercial bank accounts.",
+            "isCorrect": false
+          },
+          {
+            "id": 6004,
+            "text": "It waives local product liability requirements.",
+            "isCorrect": false
+          }
+        ]
+      }
+    ]
+  }
+]

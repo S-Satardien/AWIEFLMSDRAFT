@@ -1,0 +1,51 @@
+@import "tailwindcss";
+
+@theme {
+  /* Official AWIEF Brand Palette (from awieforum.org) */
+  --color-awief-plum: #7F3D59;
+  --color-awief-plum-dark: #5E2C41;
+  --color-awief-plum-light: #A85D7A;
+  --color-awief-gold: #D4AF37;
+  --color-awief-berry: #1D0B14;
+  --color-awief-warm: #FDF8F9;
+  --color-awief-cream: #FDFCFA;
+
+  /* Legacy Component Aliases mapped to AWIEF Brand Palette */
+  --color-vacfa-red: #7F3D59;
+  --color-vacfa-red-dark: #5E2C41;
+  --color-vacfa-charcoal: #1D0B14;
+  --color-vacfa-light: #FDF8F9;
+  --color-vacfa-navy: #2D1220;
+  --color-vacfa-gold: #D4AF37;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    background-color: var(--color-awief-warm);
+    color: var(--color-awief-berry);
+    font-family: var(--font-outfit), sans-serif;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    letter-spacing: -0.02em;
+  }
+  .font-serif {
+    font-family: var(--font-playfair), serif;
+  }
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+  @page {
+    size: landscape;
+    margin: 0;
+  }
+}

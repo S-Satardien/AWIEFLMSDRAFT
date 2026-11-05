@@ -1,0 +1,217 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String   @id @default(cuid())
+  email             String   @unique
+  name              String?
+  role              String   @default("STUDENT") // STUDENT, ADMIN, REVIEWER
+  password          String   // Hashed password
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  // Gamification & Demographics
+  lastActiveDate    DateTime?
+  currentStreak     Int      @default(0)
+  country           String?
+  showOnLeaderboard Boolean  @default(true)
+  
+  // Enterprise & Professional Demographics
+  organization      String?  // Company / Enterprise Name
+  profession        String?  // Founder, Managing Director, CEO, etc.
+  businessStage     String?  // Idea / Early Stage, Growth Stage, Scaling / Export Ready
+  sector            String?  // Agribusiness, FinTech, HealthTech, Green Energy, Manufacturing, Retail
+  awiefProgram      String?  // Growth Accelerator, Nedbank Growth & Export, Pitch 'n Grow, AWE, General
+  yearsInBusiness   String?  // <1 year, 1-3 years, 3-5 years, >5 years
+  isAwiefAlumni     Boolean  @default(false)
+  
+  // Legacy / Form Compatibility Fields
+  isNitagMember     Boolean  @default(false)
+  nitagCountry      String?
+  nitagPosition     String?
+  nitagYears        String?
+  goals             String? 
+  
+  enrollments       Enrollment[]
+  transactions      Transaction[]
+  quizAttempts      QuizAttempt[]
+  reviewComments    ReviewComment[]
+  surveyResponses   CourseSurveyResponse[]
+  certificates      Certificate[]
+}
+
+model Course {
+  id                 String   @id
+  title              String
+  slug               String?  @unique
+  description        String? 
+  shortDescription   String? 
+  instructor         String?  // Legacy instructor Name
+  instructorRole     String?  // Legacy instructor Title
+  authorName         String?  // Expert Author Name
+  authorRole         String?  // Expert Author Title & Organization
+  authorEmail        String?  // Expert Author Email for Statement delivery
+  authorBio          String?  // Extended Bio
+  thumbnailUrl       String?
+  duration           String?
+  category           String?
+  learningObjectives String?
+  targetAudience     String? 
+  
+  // Commercial & Royalty Split Configuration
+  priceZar           Float    @default(0)
+  priceUsd           Float    @default(0)
+  isFree             Boolean  @default(false)
+  royaltyRate        Float    @default(35) // % of net revenue owed to author
+  learndashSourceId  String?  // Reference ID if migrated from LearnDash (e.g. "LD-101")
+  
+  // Delivery Mode: Native Multi-Module vs SCORM
+  scormPath          String?  // Path to unzipped SCORM folder or web entrypoint
+  isNative           Boolean  @default(true)
+  modulesJson        String?  // JSON array of 20-30 min modules (title, videoUrl, caseStudy, template, quiz)
+  isPublished        Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  enrollments        Enrollment[]
+  transactions       Transaction[]
+  surveyResponses    CourseSurveyResponse[]
+  certificates       Certificate[]
+}
+
+model Transaction {
+  id                  String   @id @default(cuid())
+  reference           String   @unique // e.g. AWIEF-PF-202611-8492
+  userId              String
+  courseId            String
+  gateway             String   // PAYFAST, PAYPAL, PAYSTACK, FLUTTERWAVE, SCHOLARSHIP
+  paymentMethodDetail String?  // e.g. Instant EFT, Visa/Mastercard, M-Pesa, MTN MoMo
+  currency            String   @default("ZAR")
+  amountOriginal      Float    @default(0)
+  amountZar           Float    @default(0)
+  gatewayFeeZar       Float    @default(0)
+  netAmountZar        Float    @default(0)
+  royaltyRateSnapshot Float    @default(35)
+  authorRoyaltyZar    Float    @default(0)
+  awiefShareZar       Float    @default(0)
+  billingMonth        String   @default("") // "YYYY-MM" e.g. "2026-11"
+  status              String   @default("COMPLETED")
+  createdAt           DateTime @default(now())
+
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course              Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+}
+
+model Enrollment {
+  id                String    @id @default(cuid())
+  userId            String
+  courseId          String
+  status            String    @default("NOT_STARTED") // NOT_STARTED, IN_PROGRESS, COMPLETED
+  progress          Float     @default(0) // 0 to 100
+  timeSpent         Int       @default(0) // In seconds
+  lastAccess        DateTime  @default(now())
+  completedAt       DateTime?
+  surveyCompleted   Boolean   @default(false)
+  certificateIssued Boolean   @default(false)
+  
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course            Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  scormState        ScormState[]
+  surveyResponse    CourseSurveyResponse?
+  certificate       Certificate?
+
+  @@unique([userId, courseId])
+}
+
+model ScormState {
+  id           String   @id @default(cuid())
+  enrollmentId String
+  cmiKey       String
+  cmiValue     String  
+  updatedAt    DateTime @updatedAt
+  
+  enrollment   Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+
+  @@unique([enrollmentId, cmiKey])
+}
+
+model Quiz {
+  id            Int      @id @default(autoincrement())
+  quizKey       String   @unique
+  courseId      String?
+  name          String
+  intro         String   @default("")
+  questionsJson String   // JSON array of QuestionItem
+  updatedAt     DateTime @updatedAt
+}
+
+model QuizAttempt {
+  id        String   @id @default(cuid())
+  userId    String
+  quizId    String   // ID if native, or reference to SCORM quiz
+  score     Float
+  maxScore  Float
+  passed    Boolean
+  details   String?  // JSON stringified tracking of exact answers
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ReviewComment {
+  id              String   @id @default(cuid())
+  courseId        String
+  userId          String
+  lessonHash      String   // The specific lesson URL hash or identifier
+  selectedText    String   // The text the reviewer highlighted/clicked
+  elementSelector String   // The DOM path to visually anchor the comment
+  comment         String  
+  status          String   @default("OPEN") // OPEN or RESOLVED
+  createdAt       DateTime @default(now())
+  
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model CourseSurveyResponse {
+  id                            String     @id @default(cuid())
+  enrollmentId                  String     @unique
+  userId                        String
+  courseId                      String
+  courseName                    String
+  q1_platformNav                Int        // Likert 1-5
+  q2_materialsClear             Int        // Likert 1-5
+  q3_durationAppropriate        Int        // Likert 1-5
+  q4_contentMatchedObjectives   Int        // Likert 1-5
+  q5_understandingBefore        Int        // Likert 1-5
+  q6_understandingAfter         Int        // Likert 1-5
+  q7_confidenceExplain          Int        // Likert 1-5
+  q8_applicationOpenEnded       String    
+  q9_recommendedCoursesOpenEnded String   
+  createdAt                     DateTime   @default(now())
+  
+  enrollment                    Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  user                          User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course                        Course     @relation(fields: [courseId], references: [id], onDelete: Cascade)
+}
+
+model Certificate {
+  id                String     @id @default(cuid())
+  certificateNumber String     @unique // E.g. CERT-AWIEF-2026-INV-8492
+  enrollmentId      String     @unique
+  userId            String
+  courseId          String
+  recipientName     String
+  courseTitle       String
+  issuedAt          DateTime   @default(now())
+  qrCodeData        String?   
+  
+  enrollment        Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  user              User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course            Course     @relation(fields: [courseId], references: [id], onDelete: Cascade)
+}
