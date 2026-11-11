@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Download, Printer, X } from "lucide-react";
+import { Download, Printer, X } from "@/components/Icons";
 
 interface TransactionItem {
   id: string;

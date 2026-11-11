@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { processCourseCheckout } from "./actions";
-import { X, CreditCard, Globe, Smartphone, Gift, ShieldCheck } from "lucide-react";
+import { X, CreditCard, Globe, Smartphone, Gift, ShieldCheck } from "@/components/Icons";
 
 interface CheckoutModalProps {
   course: {

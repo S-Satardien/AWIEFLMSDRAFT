@@ -6,7 +6,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { checkUserEligibility, setupInitialPassword, resetUserPassword } from "./actions";
-import { Sparkles } from "lucide-react";
+import { Sparkles } from "@/components/Icons";
 
 /**
  * Authentication login, password reset, and activation portal for AWIEF Academy.

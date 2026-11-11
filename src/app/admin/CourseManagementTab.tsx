@@ -2,23 +2,29 @@
 
 import { useState } from "react";
 import { saveAdminCourse, deleteAdminCourse } from "./actions";
-import { Plus, Pencil, Trash2, HelpCircle, X, Check } from "lucide-react";
+import { Plus, Pencil, Trash2, HelpCircle, X, Check, Eye, Users } from "@/components/Icons";
 
 interface CourseManagementTabProps {
   courses: any[];
   onRefresh: () => void;
   onManageCourseQuizzes?: (courseId: string) => void;
+  onSelectCourse?: (course: any) => void;
 }
 
 /**
  * Self-service course management and curriculum builder for AWIEF administrators.
  * Enables non-technical staff to author new commercial masterclasses, edit pricing (ZAR/USD),
- * configure faculty author royalties, and toggle between Native Modules and SCORM packages.
+ * configure faculty author royalties, and manage course delivery format.
  *
  * @param {CourseManagementTabProps} props - Component properties.
  * @returns {JSX.Element} The rendered course builder.
  */
-export default function CourseManagementTab({ courses, onRefresh, onManageCourseQuizzes }: CourseManagementTabProps) {
+export default function CourseManagementTab({
+  courses,
+  onRefresh,
+  onManageCourseQuizzes,
+  onSelectCourse
+}: CourseManagementTabProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [selectedCourse, setSelectedCourse] = useState<any | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -324,7 +330,7 @@ export default function CourseManagementTab({ courses, onRefresh, onManageCourse
                   onChange={(e) => setFormData({ ...formData, isNative: e.target.checked })}
                   className="rounded border-gray-300 text-[#7F3D59]"
                 />
-                <span>Native Bite-Sized Modules (Unchecked = Legacy SCORM Package)</span>
+                <span>Native Interactive Modules (Unchecked = Interactive Simulation Package)</span>
               </label>
 
               <label className="flex items-center gap-2 text-xs font-medium text-gray-700">
@@ -386,7 +392,17 @@ export default function CourseManagementTab({ courses, onRefresh, onManageCourse
               {courses.map((c) => (
                 <tr key={c.id} className="hover:bg-gray-50/70 transition-colors">
                   <td className="py-3 px-4 font-bold text-gray-900 max-w-xs">
-                    <p className="line-clamp-1">{c.title}</p>
+                    {onSelectCourse ? (
+                      <button
+                        type="button"
+                        onClick={() => onSelectCourse(c)}
+                        className="text-left font-bold text-[#7F3D59] hover:underline line-clamp-1 flex items-center gap-1.5"
+                      >
+                        <span>{c.title}</span>
+                      </button>
+                    ) : (
+                      <p className="line-clamp-1">{c.title}</p>
+                    )}
                     <p className="text-[10px] text-gray-400 font-mono">{c.id}</p>
                   </td>
                   <td className="py-3 px-4 text-gray-700">
@@ -400,7 +416,7 @@ export default function CourseManagementTab({ courses, onRefresh, onManageCourse
                       </span>
                     ) : (
                       <span className="px-2 py-0.5 rounded bg-purple-50 text-purple-800 text-[10px] font-bold border border-purple-200">
-                        SCORM Package
+                        Interactive Package
                       </span>
                     )}
                   </td>
@@ -423,6 +439,17 @@ export default function CourseManagementTab({ courses, onRefresh, onManageCourse
                   </td>
                   <td className="py-3 px-4 text-center">
                     <div className="flex items-center justify-center gap-1.5">
+                      {onSelectCourse && (
+                        <button
+                          type="button"
+                          onClick={() => onSelectCourse(c)}
+                          className="px-2.5 py-1 bg-[#7F3D59]/10 hover:bg-[#7F3D59]/20 text-[#7F3D59] rounded text-[11px] font-bold inline-flex items-center gap-1"
+                          title="Manage Curriculum & Enrolled Roster"
+                        >
+                          <Eye className="w-3 h-3 text-[#7F3D59]" />
+                          <span>Workspace</span>
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => handleStartEdit(c)}

@@ -13,7 +13,7 @@ import {
   BookOpen,
   ExternalLink,
   Check
-} from "lucide-react";
+} from "@/components/Icons";
 import {
   QuizItem,
   QuestionItem,

@@ -1,16 +1,46 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import Confetti from "react-confetti";
 import { getDashboardData, getLeaderboard } from "./actions";
-import { COUNTRIES } from "@/lib/countries";
-import { Sparkles, Award } from "lucide-react";
+import { calculateFounderMilestones, FounderBadge } from "@/lib/milestones";
+import {
+  Sparkles,
+  Award,
+  Zap,
+  TrendingUp,
+  CheckCircle2,
+  CircleDollarSign,
+  ShieldCheck,
+  Globe,
+  FileText,
+  Mic,
+  Layers,
+  GraduationCap,
+  ArrowRight,
+  BookOpen
+} from "@/components/Icons";
+
+const ICON_MAP: Record<string, any> = {
+  Sparkles,
+  Zap,
+  TrendingUp,
+  CheckCircle2,
+  CircleDollarSign,
+  ShieldCheck,
+  Globe,
+  FileText,
+  Mic,
+  Award,
+  Layers,
+  GraduationCap
+};
 
 /**
  * Learner dashboard client component for the AWIEF Digital Learning Academy.
- * Displays enrolled masterclasses with progress bars, Pan-African Founders Leaderboard,
- * entrepreneurial competency badges, and quick links to verifiable certificates.
+ * Displays enrolled masterclasses, Pan-African Founders Leaderboard,
+ * 5-tier progressive milestones with "Next to Chase" spotlight, and verifiable QR credentials.
  *
  * @returns {JSX.Element} The rendered dashboard client component.
  */
@@ -18,6 +48,7 @@ export default function DashboardClient() {
   const [data, setData] = useState<any>(null);
   const [leaderboard, setLeaderboard] = useState<any[]>([]);
   const [showConfetti, setShowConfetti] = useState(false);
+  const [milestoneFilter, setMilestoneFilter] = useState<"ALL" | "UNLOCKED" | "LOCKED">("ALL");
 
   useEffect(() => {
     async function fetchData() {
@@ -34,7 +65,28 @@ export default function DashboardClient() {
     fetchData();
   }, []);
 
-  if (!data) {
+  const milestones = useMemo(() => {
+    if (!data) return null;
+    return calculateFounderMilestones({
+      totalPoints: data.totalPoints || 0,
+      currentStreak: data.currentStreak || 1,
+      totalCourses: data.totalCourses || 0,
+      completedCourses: data.completedCourses || 0,
+      totalCertificates: data.totalCertificates || 0,
+      avgProgress: data.avgProgress || 0,
+      quizzesPassedCount: data.quizzesPassedCount || 0,
+      enrolledCourses: data.enrolledCourses || []
+    });
+  }, [data]);
+
+  const filteredBadges = useMemo(() => {
+    if (!milestones) return [];
+    if (milestoneFilter === "UNLOCKED") return milestones.badges.filter((b) => b.unlocked);
+    if (milestoneFilter === "LOCKED") return milestones.badges.filter((b) => !b.unlocked);
+    return milestones.badges;
+  }, [milestones, milestoneFilter]);
+
+  if (!data || !milestones) {
     return (
       <div className="flex justify-center items-center h-64">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#7F3D59]"></div>
@@ -42,43 +94,10 @@ export default function DashboardClient() {
     );
   }
 
-  // Dynamic Badges across courses
-  const invCourse = data.enrolledCourses.find((c: any) => c.id.includes("investment"));
-  const tradeCourse = data.enrolledCourses.find((c: any) => c.id.includes("export") || c.id.includes("afcfta"));
-
-  const badges = [
-    {
-      id: "pioneer",
-      name: "AWIEF Pioneer",
-      description: "Registered and active on the AWIEF Digital Learning Academy.",
-      tag: "PIONEER",
-      unlocked: true,
-    },
-    {
-      id: "investment_ready",
-      name: "Investment Ready",
-      description: "Reached 50%+ progress in Investment Readiness & Capital Raising.",
-      tag: "INVESTMENT",
-      unlocked: Boolean(invCourse && invCourse.progress >= 50),
-    },
-    {
-      id: "afcfta_exporter",
-      name: "AfCFTA Exporter",
-      description: "Completed AfCFTA Cross-Border Trade & Compliance Mastery.",
-      tag: "TRADE",
-      unlocked: Boolean(tradeCourse && tradeCourse.isComplete),
-    },
-    {
-      id: "certified_founder",
-      name: "Certified Founder",
-      description: "Completed masterclass, passed assessment, and earned verifiable QR certificate.",
-      tag: "CERTIFIED",
-      unlocked: data.totalCertificates > 0,
-    },
-  ];
+  const { currentRank, nextRank, rankProgress, pointsToNextRank, nextToChase } = milestones;
 
   return (
-    <div className="space-y-8 relative selection:bg-[#7F3D59] selection:text-white">
+    <div className="space-y-8 relative selection:bg-[#7F3D59] selection:text-white pb-12">
       {showConfetti && (
         <div className="fixed inset-0 z-50 pointer-events-none">
           <Confetti
@@ -110,9 +129,7 @@ export default function DashboardClient() {
               className="px-5 py-2.5 bg-[#7F3D59] hover:bg-[#5E2C41] text-white rounded-xl text-xs font-bold transition-all shadow-md inline-flex items-center gap-2"
             >
               <span>Explore Masterclass Catalogue</span>
-              <svg className="w-4 h-4 text-[#D4AF37]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
-              </svg>
+              <ArrowRight className="w-3.5 h-3.5 text-[#D4AF37]" />
             </Link>
             <Link
               href="/dashboard/courses"
@@ -147,7 +164,7 @@ export default function DashboardClient() {
           </div>
 
           <div className="bg-[#FDF8F9] p-4 rounded-2xl border border-[#EAD7E0] text-center min-w-[120px]">
-            <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Founder Points</p>
+            <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Founder XP</p>
             <div className="text-2xl font-serif font-extrabold text-[#5E2C41] mt-1">
               {data.totalPoints}
             </div>
@@ -155,10 +172,98 @@ export default function DashboardClient() {
         </div>
       </div>
 
+      {/* FOUNDER RANK PROGRESSION STRIP */}
+      <div className="bg-white rounded-3xl p-6 sm:p-7 border border-[#EAD7E0] shadow-sm space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex items-center gap-3">
+            <span className="px-3 py-1 bg-[#7F3D59] text-white text-xs font-bold rounded-xl uppercase tracking-wider">
+              {currentRank.badgeTag}
+            </span>
+            <div>
+              <h2 className="text-base sm:text-lg font-serif font-bold text-gray-900">
+                {currentRank.title}
+              </h2>
+              <p className="text-xs text-gray-500">{currentRank.description}</p>
+            </div>
+          </div>
+
+          {nextRank ? (
+            <div className="text-xs text-gray-600 sm:text-right">
+              Next Rank: <strong className="text-[#7F3D59]">{nextRank.title}</strong>
+              <div className="text-[11px] text-gray-400 font-mono">
+                {pointsToNextRank} XP remaining to unlock
+              </div>
+            </div>
+          ) : (
+            <span className="text-xs font-bold text-[#D4AF37] uppercase tracking-wider">
+              Maximum Academic Level Achieved
+            </span>
+          )}
+        </div>
+
+        {/* Level Progression Bar */}
+        <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden">
+          <div
+            className="h-3 bg-gradient-to-r from-[#7F3D59] to-[#D4AF37] rounded-full transition-all duration-1000"
+            style={{ width: `${rankProgress}%` }}
+          ></div>
+        </div>
+      </div>
+
+      {/* "NEXT MILESTONE TO CHASE" SPOTLIGHT CARD */}
+      {nextToChase && (
+        <div className="bg-gradient-to-r from-[#1D0B14] via-[#3E1A29] to-[#7F3D59] rounded-3xl p-6 sm:p-8 text-white shadow-lg border border-[#D4AF37]/40 relative overflow-hidden flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+          <div className="absolute top-0 right-0 w-80 h-80 bg-[#D4AF37]/10 rounded-full blur-3xl pointer-events-none"></div>
+
+          <div className="space-y-2 max-w-2xl relative z-10">
+            <div className="flex items-center gap-2">
+              <span className="px-3 py-0.5 bg-[#D4AF37] text-[#1D0B14] text-[10px] font-bold rounded-full uppercase tracking-wider font-serif">
+                Next Milestone to Chase
+              </span>
+              <span className="px-2.5 py-0.5 bg-white/10 text-gray-200 text-[10px] font-medium rounded-full">
+                {nextToChase.tierLabel}
+              </span>
+              <span className="text-xs text-[#D4AF37] font-bold">+{nextToChase.xpReward} XP</span>
+            </div>
+
+            <h3 className="text-xl sm:text-2xl font-serif font-bold text-white flex items-center gap-2">
+              <span>{nextToChase.name}</span>
+            </h3>
+
+            <p className="text-xs sm:text-sm text-gray-300 leading-relaxed font-light">
+              {nextToChase.description}
+            </p>
+
+            <div className="pt-2 space-y-1.5 max-w-lg">
+              <div className="flex justify-between text-xs font-semibold text-gray-300">
+                <span>Requirement: {nextToChase.requirementText}</span>
+                <span className="text-[#D4AF37] font-bold">{nextToChase.progressPercent}%</span>
+              </div>
+              <div className="w-full bg-white/20 rounded-full h-2 overflow-hidden">
+                <div
+                  className="h-2 bg-[#D4AF37] rounded-full transition-all duration-700"
+                  style={{ width: `${nextToChase.progressPercent}%` }}
+                ></div>
+              </div>
+            </div>
+          </div>
+
+          <div className="relative z-10 shrink-0 self-stretch md:self-auto flex items-center">
+            <Link
+              href={nextToChase.ctaUrl}
+              className="w-full md:w-auto px-6 py-3 bg-[#D4AF37] hover:bg-[#B89628] text-[#1D0B14] font-serif font-bold text-xs rounded-xl transition-all shadow-md flex items-center justify-center gap-2"
+            >
+              <span>{nextToChase.ctaLabel}</span>
+              <ArrowRight className="w-4 h-4 text-[#1D0B14]" />
+            </Link>
+          </div>
+        </div>
+      )}
+
       {/* Main Content Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
-        {/* Left 2 Columns: Enrolled Courses & Trophy Case */}
+        {/* Left 2 Columns: Enrolled Courses & 5-Tier Trophy Case */}
         <div className="lg:col-span-2 space-y-8">
           
           {/* Enrolled Courses Summary */}
@@ -201,6 +306,11 @@ export default function DashboardClient() {
                         <span className="text-[11px] text-gray-500 font-medium">
                           {course.duration}
                         </span>
+                        {course.receipt && (
+                          <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded text-[10px] font-bold">
+                            Paid via {course.receipt.gateway}
+                          </span>
+                        )}
                       </div>
                       <h3 className="text-base font-serif font-bold text-gray-900 leading-snug">
                         {course.title}
@@ -255,43 +365,130 @@ export default function DashboardClient() {
             )}
           </div>
 
-          {/* Trophy Case */}
+          {/* 5-TIER FOUNDER TROPHY CASE */}
           <div className="bg-white rounded-3xl shadow-sm border border-[#EAD7E0] p-8 space-y-6">
-            <div>
-              <h2 className="text-2xl font-serif font-bold text-gray-900">Founder Milestones &amp; Badges</h2>
-              <p className="text-xs text-gray-500 mt-0.5">Commercial capabilities unlocked across your executive journey</p>
-            </div>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h2 className="text-2xl font-serif font-bold text-gray-900">
+                  Founder Milestones &amp; Badges ({milestones.unlockedCount}/{milestones.totalBadges})
+                </h2>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  12 progressive competencies across 5 tiers rewarding your commercial and leadership growth.
+                </p>
+              </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              {badges.map((b) => (
-                <div
-                  key={b.id}
-                  className={`flex flex-col items-center text-center p-5 rounded-2xl border transition-all ${
-                    b.unlocked
-                      ? "border-[#D4AF37]/50 bg-amber-50/40 shadow-sm"
-                      : "border-dashed border-gray-200 bg-gray-50 opacity-50"
+              {/* Filter Tabs */}
+              <div className="flex items-center gap-1 bg-[#FDF8F9] p-1 rounded-xl border border-[#EAD7E0] text-xs font-bold self-start sm:self-auto">
+                <button
+                  onClick={() => setMilestoneFilter("ALL")}
+                  className={`px-3 py-1.5 rounded-lg transition-colors ${
+                    milestoneFilter === "ALL"
+                      ? "bg-[#7F3D59] text-white"
+                      : "text-gray-600 hover:text-gray-900"
                   }`}
                 >
-                  <div className="w-10 h-10 rounded-xl bg-[#7F3D59] text-white flex items-center justify-center font-bold text-[10px] mb-3">
-                    {b.tag}
-                  </div>
-                  <h4 className={`font-serif font-bold text-xs ${b.unlocked ? "text-gray-900" : "text-gray-500"}`}>
-                    {b.name}
-                  </h4>
-                  <p className="text-[10px] text-gray-500 mt-1 leading-tight">{b.description}</p>
-                  <div className="mt-3">
-                    {b.unlocked ? (
-                      <span className="bg-emerald-100 text-emerald-800 text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
-                        Unlocked
+                  All ({milestones.totalBadges})
+                </button>
+                <button
+                  onClick={() => setMilestoneFilter("UNLOCKED")}
+                  className={`px-3 py-1.5 rounded-lg transition-colors ${
+                    milestoneFilter === "UNLOCKED"
+                      ? "bg-[#7F3D59] text-white"
+                      : "text-gray-600 hover:text-gray-900"
+                  }`}
+                >
+                  Unlocked ({milestones.unlockedCount})
+                </button>
+                <button
+                  onClick={() => setMilestoneFilter("LOCKED")}
+                  className={`px-3 py-1.5 rounded-lg transition-colors ${
+                    milestoneFilter === "LOCKED"
+                      ? "bg-[#7F3D59] text-white"
+                      : "text-gray-600 hover:text-gray-900"
+                  }`}
+                >
+                  Next Up ({milestones.totalBadges - milestones.unlockedCount})
+                </button>
+              </div>
+            </div>
+
+            {/* Badges Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredBadges.map((badge: FounderBadge) => {
+                const IconComponent = ICON_MAP[badge.iconName] || Award;
+
+                return (
+                  <div
+                    key={badge.id}
+                    className={`p-5 rounded-2xl border transition-all flex flex-col justify-between space-y-3 ${
+                      badge.unlocked
+                        ? "border-[#D4AF37]/50 bg-amber-50/30 shadow-xs hover:border-[#D4AF37]"
+                        : "border-gray-200 bg-gray-50/60 opacity-75 hover:opacity-100"
+                    }`}
+                  >
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div
+                          className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold ${
+                            badge.unlocked
+                              ? "bg-[#7F3D59] text-[#D4AF37] shadow-xs"
+                              : "bg-gray-200 text-gray-500"
+                          }`}
+                        >
+                          <IconComponent className="w-5 h-5" />
+                        </div>
+                        <span className="text-[10px] font-bold text-[#7F3D59] font-mono">
+                          +{badge.xpReward} XP
+                        </span>
+                      </div>
+
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500 block">
+                        {badge.tierLabel}
                       </span>
-                    ) : (
-                      <span className="bg-gray-200 text-gray-600 text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
-                        Locked
-                      </span>
-                    )}
+                      <h4
+                        className={`font-serif font-bold text-sm ${
+                          badge.unlocked ? "text-gray-900" : "text-gray-700"
+                        }`}
+                      >
+                        {badge.name}
+                      </h4>
+                      <p className="text-xs text-gray-500 leading-relaxed line-clamp-2">
+                        {badge.description}
+                      </p>
+                    </div>
+
+                    <div className="space-y-2 pt-2 border-t border-gray-100">
+                      <div className="flex justify-between items-center text-[11px] font-medium text-gray-500">
+                        <span>{badge.unlocked ? "Status: Unlocked" : "Progress"}</span>
+                        <span className="font-bold text-gray-700">{badge.progressPercent}%</span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
+                        <div
+                          className={`h-1.5 rounded-full ${
+                            badge.unlocked ? "bg-emerald-600" : "bg-[#7F3D59]"
+                          }`}
+                          style={{ width: `${badge.progressPercent}%` }}
+                        ></div>
+                      </div>
+
+                      <div className="pt-1">
+                        {badge.unlocked ? (
+                          <span className="w-full py-1 bg-emerald-100 text-emerald-800 text-[10px] font-bold rounded-lg text-center block uppercase tracking-wider">
+                            Badge Unlocked
+                          </span>
+                        ) : (
+                          <Link
+                            href={badge.ctaUrl}
+                            className="w-full py-1 bg-white hover:bg-gray-100 border border-gray-300 text-gray-700 text-[10px] font-bold rounded-lg text-center block transition-colors"
+                          >
+                            {badge.ctaLabel} →
+                          </Link>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
           
@@ -336,25 +533,29 @@ export default function DashboardClient() {
                       </div>
                       <div className="flex items-center gap-2">
                         {user.displayCountry && (
-                          <img
-                            src={`https://flagcdn.com/w40/${user.displayCountry.toLowerCase()}.png`}
-                            alt={user.displayCountry}
-                            title={user.displayCountry}
-                            className="w-4 h-auto rounded-[2px]"
-                          />
+                          <span className="font-mono text-[10px] bg-white/20 px-1.5 py-0.5 rounded text-white">
+                            [{user.displayCountry}]
+                          </span>
                         )}
-                        <span
-                          className={`font-bold text-xs ${
-                            idx === 0 ? "text-[#D4AF37]" : "text-white"
-                          }`}
-                        >
-                          {user.displayName}
-                        </span>
+                        <div>
+                          <span
+                            className={`font-bold text-xs block ${
+                              idx === 0 ? "text-[#D4AF37]" : "text-white"
+                            }`}
+                          >
+                            {user.displayName}
+                          </span>
+                          {user.displayOrg && (
+                            <span className="text-[10px] text-gray-400 block truncate max-w-[140px]">
+                              {user.displayOrg}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
                     <div className="text-right">
                       <div className="text-xs font-bold text-white font-mono">
-                        {user.points.toLocaleString()} pts
+                        {user.points.toLocaleString()} XP
                       </div>
                     </div>
                   </div>
@@ -364,7 +565,7 @@ export default function DashboardClient() {
 
             <div className="pt-3 border-t border-gray-800 text-center">
               <p className="text-[11px] text-gray-400">
-                Points = Module Progress + Quizzes + Surveys + Certificates
+                XP = Module Progress + Quizzes + Surveys + Certificates
               </p>
             </div>
           </div>

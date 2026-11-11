@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import { resolveComment, getAdvancedQuizAnalytics, exportAllPlatformData } from "./actions";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -20,29 +19,51 @@ import {
   BarChart3,
   Calendar,
   Layers,
-  Search
-} from "lucide-react";
+  Search,
+  ChevronDown,
+  ChevronRight,
+  ShieldCheck,
+  CreditCard,
+  Eye,
+  Plus,
+  PlayCircle,
+  ArrowRight
+} from "@/components/Icons";
 import UserManagementTab from "./UserManagementTab";
 import QuizManagementTab from "./QuizManagementTab";
 import RoyaltiesTab from "./RoyaltiesTab";
 import CourseManagementTab from "./CourseManagementTab";
+import CourseUserManagement from "./CourseUserManagement";
+import StudentProfileDrawer from "./StudentProfileDrawer";
+import { resolveComment, getAdvancedQuizAnalytics, exportAllPlatformData } from "./actions";
 
 interface AdminClientProps {
   initialData: any;
 }
 
-type MainSection = "ROYALTIES" | "COURSES" | "LEARNERS" | "USERS" | "REVIEWS";
-type CourseSubTab = "BUILDER" | "QUIZZES";
-type LearnerSubTab = "COHORT" | "SURVEYS" | "CERTIFICATES" | "DIAGNOSTICS";
+type AdminView =
+  | "ROYALTIES"
+  | "TRANSACTIONS"
+  | "COURSES_BUILDER"
+  | "COURSE_DETAIL"
+  | "COURSES_QUIZZES"
+  | "COURSE_ROSTER"
+  | "COHORT"
+  | "STAFF_USERS"
+  | "CERTIFICATES"
+  | "SURVEYS"
+  | "DIAGNOSTICS"
+  | "REVIEWS";
+
+type CourseDetailSubTab = "CURRICULUM" | "ROSTER" | "QUIZZES";
 
 /**
- * Executive Control Center for the AWIEF Digital Learning Academy.
- * Features hierarchical top navigation with sub-tabs for:
- * 1. Royalties & Financial Statement Engine
- * 2. Courses & Curriculum (with integrated Course Quizzes & Assessments)
- * 3. Learner Cohorts & Analytics (Cohort progress, Surveys, Certificates, Item Diagnostics)
- * 4. User Accounts & Role Permissions
- * 5. Editorial Reviews & Annotations
+ * AWIEF Executive Control Center & Administration Portal.
+ * Features a persistent Left Sidebar with accordion dropdowns for:
+ * 1. Masterclasses & Courses (Curriculum Builder, specific course workspaces, course quizzes)
+ * 2. Course User Management (Course-scoped rosters, 360° student dossiers, master cohort, staff accounts)
+ * 3. Financials & Royalties (Author royalties, settlement statements, transaction ledger)
+ * 4. Credentials & Governance (Verifiable QR certificates, surveys, item diagnostics, reviewer annotations)
  *
  * @param {AdminClientProps} props - Initial server-fetched datasets.
  * @returns {JSX.Element} The rendered administrative interface.
@@ -63,15 +84,32 @@ export default function AdminClient({ initialData }: AdminClientProps) {
   const [advancedAnalytics, setAdvancedAnalytics] = useState<any>(null);
   const [isExportingData, setIsExportingData] = useState(false);
 
-  // Hierarchical Navigation State
-  const [activeSection, setActiveSection] = useState<MainSection>(
+  // Active View State
+  const [activeView, setActiveView] = useState<AdminView>(
     role === "ADMIN" ? "ROYALTIES" : "REVIEWS"
   );
-  const [courseSubTab, setCourseSubTab] = useState<CourseSubTab>("BUILDER");
-  const [learnerSubTab, setLearnerSubTab] = useState<LearnerSubTab>("COHORT");
+
+  // Sidebar Accordion Collapsible State
+  const [sidebarAccordions, setSidebarAccordions] = useState({
+    courses: true,
+    users: true,
+    royalties: true,
+    governance: false
+  });
+
+  const toggleAccordion = (section: keyof typeof sidebarAccordions) => {
+    setSidebarAccordions((prev) => ({ ...prev, [section]: !prev[section] }));
+  };
+
+  // Dedicated Course Selection & Sub-Tab State
+  const [selectedCourse, setSelectedCourse] = useState<any>(courses[0] || null);
+  const [courseDetailSubTab, setCourseDetailSubTab] = useState<CourseDetailSubTab>("CURRICULUM");
   const [courseQuizFilter, setCourseQuizFilter] = useState<string | null>(null);
 
-  // Search filter for learners table
+  // 360° Student Drawer State
+  const [inspectStudentId, setInspectStudentId] = useState<string | null>(null);
+
+  // Search filter for cohort table
   const [learnerSearch, setLearnerSearch] = useState("");
 
   useEffect(() => {
@@ -85,14 +123,27 @@ export default function AdminClient({ initialData }: AdminClientProps) {
     setComments(comments.map((c: any) => (c.id === id ? { ...c, status: "RESOLVED" } : c)));
   };
 
-  // Switch to Quizzes sub-tab with a specific course pre-selected
+  // Open Quizzes for a specific course
   const handleOpenCourseQuizzes = (courseId: string) => {
-    setActiveSection("COURSES");
-    setCourseSubTab("QUIZZES");
-    setCourseQuizFilter(courseId);
+    const c = courses.find((item: any) => item.id === courseId);
+    if (c) {
+      setSelectedCourse(c);
+      setActiveView("COURSE_DETAIL");
+      setCourseDetailSubTab("QUIZZES");
+    } else {
+      setActiveView("COURSES_QUIZZES");
+      setCourseQuizFilter(courseId);
+    }
   };
 
-  // Full platform data export (Zero vendor lock-in demonstration)
+  // Switch to specific course workspace
+  const handleSelectCourseWorkspace = (course: any) => {
+    setSelectedCourse(course);
+    setActiveView("COURSE_DETAIL");
+    setCourseDetailSubTab("CURRICULUM");
+  };
+
+  // Full platform data export
   const handleExportFullPlatformData = async () => {
     setIsExportingData(true);
     try {
@@ -137,7 +188,7 @@ export default function AdminClient({ initialData }: AdminClientProps) {
     URL.revokeObjectURL(url);
   };
 
-  // Filtered Students
+  // Filtered Cohort Students
   const filteredStudents = useMemo(() => {
     if (!learnerSearch.trim()) return students;
     const q = learnerSearch.toLowerCase();
@@ -197,6 +248,16 @@ export default function AdminClient({ initialData }: AdminClientProps) {
   );
   const openCommentsCount = courseComments.filter((c: any) => c.status === "OPEN").length;
 
+  // Parse modules of selected course
+  const selectedCourseModules = useMemo(() => {
+    if (!selectedCourse?.modulesJson) return [];
+    try {
+      return JSON.parse(selectedCourse.modulesJson);
+    } catch {
+      return [];
+    }
+  }, [selectedCourse]);
+
   return (
     <div className="space-y-6 selection:bg-[#7F3D59] selection:text-white">
       {/* Top Header Strip with UN ECOSOC Seal & Platform Export Actions */}
@@ -209,14 +270,14 @@ export default function AdminClient({ initialData }: AdminClientProps) {
             </span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-serif font-extrabold text-[#1D0B14]">
-            AWIEF Executive Administration &amp; Royalties Hub
+            AWIEF Executive Administration
           </h1>
           <p className="text-xs text-gray-500 mt-0.5">
-            Track author royalties, manage commercial masterclasses and embedded quizzes, monitor pan-African cohorts, and export audited statements.
+            Manage commercial masterclasses, course rosters, single-student dossiers, author royalties, and credential verification.
           </p>
         </div>
 
-        {/* Global Action Export Strip (Zero Vendor Lock-in) */}
+        {/* Global Action Export Strip */}
         {role === "ADMIN" && (
           <div className="flex flex-wrap items-center gap-2 self-start lg:self-auto shrink-0">
             <button
@@ -241,257 +302,602 @@ export default function AdminClient({ initialData }: AdminClientProps) {
         )}
       </div>
 
-      {/* Primary Section Tabs Navigation Bar */}
-      <div className="bg-white p-1.5 rounded-2xl shadow-sm border border-[#EAD7E0] flex overflow-x-auto gap-1.5">
-        {role === "ADMIN" && (
-          <>
-            {/* 1. ROYALTIES */}
-            <button
-              type="button"
-              onClick={() => setActiveSection("ROYALTIES")}
-              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-2 ${
-                activeSection === "ROYALTIES"
-                  ? "bg-[#7F3D59] text-white shadow-sm"
-                  : "text-gray-700 hover:bg-[#FDF8F9] hover:text-[#7F3D59]"
-              }`}
-            >
-              <CircleDollarSign className="w-4 h-4" />
-              <span>Author Royalties &amp; Statements</span>
-              <span
-                className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold ${
-                  activeSection === "ROYALTIES"
-                    ? "bg-white/20 text-white"
-                    : "bg-gray-100 text-[#7F3D59]"
-                }`}
-              >
-                R{totalRoyaltiesOwed.toLocaleString()}
-              </span>
-            </button>
-
-            {/* 2. COURSES (With Embedded Quizzes) */}
-            <button
-              type="button"
-              onClick={() => setActiveSection("COURSES")}
-              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-2 ${
-                activeSection === "COURSES"
-                  ? "bg-[#7F3D59] text-white shadow-sm"
-                  : "text-gray-700 hover:bg-[#FDF8F9] hover:text-[#7F3D59]"
-              }`}
-            >
-              <BookOpen className="w-4 h-4" />
-              <span>Courses &amp; Quizzes</span>
-              <span
-                className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
-                  activeSection === "COURSES"
-                    ? "bg-white/20 text-white"
-                    : "bg-gray-100 text-gray-700"
-                }`}
-              >
-                {courses.length}
-              </span>
-            </button>
-
-            {/* 3. LEARNERS & ANALYTICS */}
-            <button
-              type="button"
-              onClick={() => setActiveSection("LEARNERS")}
-              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-2 ${
-                activeSection === "LEARNERS"
-                  ? "bg-[#7F3D59] text-white shadow-sm"
-                  : "text-gray-700 hover:bg-[#FDF8F9] hover:text-[#7F3D59]"
-              }`}
-            >
-              <GraduationCap className="w-4 h-4" />
-              <span>Learners &amp; Analytics</span>
-              <span
-                className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
-                  activeSection === "LEARNERS"
-                    ? "bg-white/20 text-white"
-                    : "bg-gray-100 text-gray-700"
-                }`}
-              >
-                {students.length}
-              </span>
-            </button>
-
-            {/* 4. USER MANAGEMENT */}
-            <button
-              type="button"
-              onClick={() => setActiveSection("USERS")}
-              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-2 ${
-                activeSection === "USERS"
-                  ? "bg-[#7F3D59] text-white shadow-sm"
-                  : "text-gray-700 hover:bg-[#FDF8F9] hover:text-[#7F3D59]"
-              }`}
-            >
-              <Users className="w-4 h-4" />
-              <span>User Management</span>
-            </button>
-          </>
-        )}
-
-        {/* 5. QUALITY & REVIEWS */}
-        <button
-          type="button"
-          onClick={() => setActiveSection("REVIEWS")}
-          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
-            activeSection === "REVIEWS"
-              ? "bg-[#7F3D59] text-white shadow-sm"
-              : "text-gray-700 hover:bg-[#FDF8F9] hover:text-[#7F3D59]"
-          }`}
-        >
-          <MessageSquareCheck className="w-4 h-4" />
-          <span>Reviewer Annotations</span>
-          {openCommentsCount > 0 && (
-            <span className="bg-[#D4AF37] text-[#1D0B14] text-[10px] font-bold px-2 py-0.5 rounded-full">
-              {openCommentsCount}
+      {/* Main Two-Column Layout: Left Sidebar + Workspace Content */}
+      <div className="flex flex-col lg:flex-row gap-6 items-start">
+        {/* LEFT SIDEBAR NAVIGATION WITH COLLAPSIBLE DROPDOWNS */}
+        <aside className="w-full lg:w-72 bg-white rounded-3xl border border-[#EAD7E0] p-4 shadow-sm shrink-0 space-y-4">
+          <div className="px-2 pt-1 pb-2 border-b border-[#EAD7E0]/60 flex items-center justify-between">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
+              Admin Navigation
             </span>
-          )}
-        </button>
-      </div>
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#7F3D59]/10 text-[#7F3D59]">
+              {role === "ADMIN" ? "Executive Portal" : "Faculty Reviewer"}
+            </span>
+          </div>
 
-      {/* SECONDARY SUB-TABS NAVIGATION (When Active Section has multiple views) */}
-      {activeSection === "COURSES" && role === "ADMIN" && (
-        <div className="bg-[#FDF8F9] p-1.5 rounded-xl border border-[#EAD7E0] flex items-center gap-2 text-xs">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 px-3">
-            Course Module View:
-          </span>
-          <button
-            type="button"
-            onClick={() => setCourseSubTab("BUILDER")}
-            className={`px-3.5 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 ${
-              courseSubTab === "BUILDER"
-                ? "bg-[#7F3D59] text-white shadow-xs"
-                : "text-gray-600 hover:bg-white hover:text-gray-900"
-            }`}
-          >
-            <Layers className="w-3.5 h-3.5" />
-            <span>Masterclass Builder ({courses.length})</span>
-          </button>
+          <nav className="space-y-3 text-xs">
+            {role === "ADMIN" && (
+              <>
+                {/* 1. MASTERCLASSES & COURSES DROPDOWN */}
+                <div className="space-y-1">
+                  <button
+                    type="button"
+                    onClick={() => toggleAccordion("courses")}
+                    className="w-full flex items-center justify-between px-3 py-2 rounded-xl font-bold text-gray-800 hover:bg-[#FDF8F9] hover:text-[#7F3D59] transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <BookOpen className="w-4 h-4 text-[#7F3D59]" />
+                      <span>Masterclasses &amp; Courses</span>
+                    </div>
+                    {sidebarAccordions.courses ? (
+                      <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+                    ) : (
+                      <ChevronRight className="w-3.5 h-3.5 text-gray-400" />
+                    )}
+                  </button>
 
-          <button
-            type="button"
-            onClick={() => setCourseSubTab("QUIZZES")}
-            className={`px-3.5 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 ${
-              courseSubTab === "QUIZZES"
-                ? "bg-[#7F3D59] text-white shadow-xs"
-                : "text-gray-600 hover:bg-white hover:text-gray-900"
-            }`}
-          >
-            <HelpCircle className="w-3.5 h-3.5" />
-            <span>Course Quizzes &amp; Assessments</span>
-          </button>
-        </div>
-      )}
+                  {sidebarAccordions.courses && (
+                    <div className="pl-6 space-y-1 border-l-2 border-[#EAD7E0] ml-3.5">
+                      <button
+                        type="button"
+                        onClick={() => setActiveView("COURSES_BUILDER")}
+                        className={`w-full text-left px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center justify-between ${
+                          activeView === "COURSES_BUILDER"
+                            ? "bg-[#7F3D59] text-white font-bold"
+                            : "text-gray-600 hover:bg-[#FDF8F9] hover:text-[#7F3D59]"
+                        }`}
+                      >
+                        <span className="truncate">All Masterclasses</span>
+                        <span className="text-[10px] opacity-75 font-mono">{courses.length}</span>
+                      </button>
 
-      {activeSection === "LEARNERS" && role === "ADMIN" && (
-        <div className="bg-[#FDF8F9] p-1.5 rounded-xl border border-[#EAD7E0] flex items-center gap-2 text-xs overflow-x-auto">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 px-3 whitespace-nowrap">
-            Analytics Sub-Views:
-          </span>
-          <button
-            type="button"
-            onClick={() => setLearnerSubTab("COHORT")}
-            className={`px-3.5 py-1.5 rounded-lg font-bold transition-all whitespace-nowrap flex items-center gap-1.5 ${
-              learnerSubTab === "COHORT"
-                ? "bg-[#7F3D59] text-white shadow-xs"
-                : "text-gray-600 hover:bg-white hover:text-gray-900"
-            }`}
-          >
-            <Users className="w-3.5 h-3.5" />
-            <span>Cohort Progress ({students.length})</span>
-          </button>
+                      {/* Dynamic Course Workspaces */}
+                      <div className="pt-1 pb-1 space-y-0.5">
+                        <p className="px-3 text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                          Course Workspaces:
+                        </p>
+                        {courses.map((c: any) => {
+                          const isSelected = activeView === "COURSE_DETAIL" && selectedCourse?.id === c.id;
+                          return (
+                            <button
+                              key={c.id}
+                              type="button"
+                              onClick={() => handleSelectCourseWorkspace(c)}
+                              className={`w-full text-left px-3 py-1.5 rounded-lg text-[11px] transition-colors truncate block ${
+                                isSelected
+                                  ? "bg-[#7F3D59]/15 text-[#7F3D59] font-bold border-l-2 border-[#7F3D59]"
+                                  : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                              }`}
+                              title={c.title}
+                            >
+                              {c.title}
+                            </button>
+                          );
+                        })}
+                      </div>
 
-          <button
-            type="button"
-            onClick={() => setLearnerSubTab("SURVEYS")}
-            className={`px-3.5 py-1.5 rounded-lg font-bold transition-all whitespace-nowrap flex items-center gap-1.5 ${
-              learnerSubTab === "SURVEYS"
-                ? "bg-[#7F3D59] text-white shadow-xs"
-                : "text-gray-600 hover:bg-white hover:text-gray-900"
-            }`}
-          >
-            <FileText className="w-3.5 h-3.5" />
-            <span>Course Surveys ({surveyResponses.length})</span>
-          </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveView("COURSES_QUIZZES");
+                          setCourseQuizFilter(null);
+                        }}
+                        className={`w-full text-left px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1.5 ${
+                          activeView === "COURSES_QUIZZES"
+                            ? "bg-[#7F3D59] text-white font-bold"
+                            : "text-gray-600 hover:bg-[#FDF8F9] hover:text-[#7F3D59]"
+                        }`}
+                      >
+                        <HelpCircle className="w-3.5 h-3.5" />
+                        <span>Course Quizzes</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
 
-          <button
-            type="button"
-            onClick={() => setLearnerSubTab("CERTIFICATES")}
-            className={`px-3.5 py-1.5 rounded-lg font-bold transition-all whitespace-nowrap flex items-center gap-1.5 ${
-              learnerSubTab === "CERTIFICATES"
-                ? "bg-[#7F3D59] text-white shadow-xs"
-                : "text-gray-600 hover:bg-white hover:text-gray-900"
-            }`}
-          >
-            <Award className="w-3.5 h-3.5" />
-            <span>Certificates Issued ({certificates.length})</span>
-          </button>
+                {/* 2. COURSE USER MANAGEMENT DROPDOWN */}
+                <div className="space-y-1">
+                  <button
+                    type="button"
+                    onClick={() => toggleAccordion("users")}
+                    className="w-full flex items-center justify-between px-3 py-2 rounded-xl font-bold text-gray-800 hover:bg-[#FDF8F9] hover:text-[#7F3D59] transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Users className="w-4 h-4 text-[#7F3D59]" />
+                      <span>Course User Management</span>
+                    </div>
+                    {sidebarAccordions.users ? (
+                      <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+                    ) : (
+                      <ChevronRight className="w-3.5 h-3.5 text-gray-400" />
+                    )}
+                  </button>
 
-          <button
-            type="button"
-            onClick={() => setLearnerSubTab("DIAGNOSTICS")}
-            className={`px-3.5 py-1.5 rounded-lg font-bold transition-all whitespace-nowrap flex items-center gap-1.5 ${
-              learnerSubTab === "DIAGNOSTICS"
-                ? "bg-[#7F3D59] text-white shadow-xs"
-                : "text-gray-600 hover:bg-white hover:text-gray-900"
-            }`}
-          >
-            <BarChart3 className="w-3.5 h-3.5" />
-            <span>Quiz Item Diagnostics</span>
-          </button>
-        </div>
-      )}
+                  {sidebarAccordions.users && (
+                    <div className="pl-6 space-y-1 border-l-2 border-[#EAD7E0] ml-3.5">
+                      <button
+                        type="button"
+                        onClick={() => setActiveView("COURSE_ROSTER")}
+                        className={`w-full text-left px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center justify-between ${
+                          activeView === "COURSE_ROSTER"
+                            ? "bg-[#7F3D59] text-white font-bold"
+                            : "text-gray-600 hover:bg-[#FDF8F9] hover:text-[#7F3D59]"
+                        }`}
+                      >
+                        <span>Course Rosters</span>
+                        <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-100 text-amber-900 font-bold">
+                          Scoped
+                        </span>
+                      </button>
 
-      {/* SECTION CONTENT PANELS */}
-      <AnimatePresence mode="wait">
-        {/* 1. ROYALTIES TAB */}
-        {activeSection === "ROYALTIES" && role === "ADMIN" && (
-          <motion.div
-            key="ROYALTIES"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-          >
-            <RoyaltiesTab transactions={transactions} courses={courses} />
-          </motion.div>
-        )}
+                      <button
+                        type="button"
+                        onClick={() => setActiveView("COHORT")}
+                        className={`w-full text-left px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center justify-between ${
+                          activeView === "COHORT"
+                            ? "bg-[#7F3D59] text-white font-bold"
+                            : "text-gray-600 hover:bg-[#FDF8F9] hover:text-[#7F3D59]"
+                        }`}
+                      >
+                        <span>Master Cohort</span>
+                        <span className="text-[10px] opacity-75 font-mono">{students.length}</span>
+                      </button>
 
-        {/* 2. COURSES TAB */}
-        {activeSection === "COURSES" && role === "ADMIN" && (
-          <motion.div
-            key="COURSES"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-          >
-            {courseSubTab === "BUILDER" ? (
-              <CourseManagementTab
-                courses={courses}
-                onRefresh={() => window.location.reload()}
-                onManageCourseQuizzes={handleOpenCourseQuizzes}
-              />
-            ) : (
-              <QuizManagementTab
-                courses={courses}
-                initialCourseId={courseQuizFilter}
-              />
+                      <button
+                        type="button"
+                        onClick={() => setActiveView("STAFF_USERS")}
+                        className={`w-full text-left px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1.5 ${
+                          activeView === "STAFF_USERS"
+                            ? "bg-[#7F3D59] text-white font-bold"
+                            : "text-gray-600 hover:bg-[#FDF8F9] hover:text-[#7F3D59]"
+                        }`}
+                      >
+                        <ShieldCheck className="w-3.5 h-3.5" />
+                        <span>Staff Accounts &amp; Roles</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* 3. FINANCIALS & ROYALTIES DROPDOWN */}
+                <div className="space-y-1">
+                  <button
+                    type="button"
+                    onClick={() => toggleAccordion("royalties")}
+                    className="w-full flex items-center justify-between px-3 py-2 rounded-xl font-bold text-gray-800 hover:bg-[#FDF8F9] hover:text-[#7F3D59] transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <CircleDollarSign className="w-4 h-4 text-[#7F3D59]" />
+                      <span>Financials &amp; Royalties</span>
+                    </div>
+                    {sidebarAccordions.royalties ? (
+                      <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+                    ) : (
+                      <ChevronRight className="w-3.5 h-3.5 text-gray-400" />
+                    )}
+                  </button>
+
+                  {sidebarAccordions.royalties && (
+                    <div className="pl-6 space-y-1 border-l-2 border-[#EAD7E0] ml-3.5">
+                      <button
+                        type="button"
+                        onClick={() => setActiveView("ROYALTIES")}
+                        className={`w-full text-left px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center justify-between ${
+                          activeView === "ROYALTIES"
+                            ? "bg-[#7F3D59] text-white font-bold"
+                            : "text-gray-600 hover:bg-[#FDF8F9] hover:text-[#7F3D59]"
+                        }`}
+                      >
+                        <span>Author Royalties</span>
+                        <span className="text-[10px] font-mono font-bold text-[#D4AF37]">
+                          R{totalRoyaltiesOwed.toLocaleString()}
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setActiveView("TRANSACTIONS")}
+                        className={`w-full text-left px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center justify-between ${
+                          activeView === "TRANSACTIONS"
+                            ? "bg-[#7F3D59] text-white font-bold"
+                            : "text-gray-600 hover:bg-[#FDF8F9] hover:text-[#7F3D59]"
+                        }`}
+                      >
+                        <span>Settlement Ledger</span>
+                        <span className="text-[10px] opacity-75 font-mono">{transactions.length}</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* 4. CREDENTIALS & GOVERNANCE DROPDOWN */}
+                <div className="space-y-1">
+                  <button
+                    type="button"
+                    onClick={() => toggleAccordion("governance")}
+                    className="w-full flex items-center justify-between px-3 py-2 rounded-xl font-bold text-gray-800 hover:bg-[#FDF8F9] hover:text-[#7F3D59] transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Award className="w-4 h-4 text-[#7F3D59]" />
+                      <span>Credentials &amp; Quality</span>
+                    </div>
+                    {sidebarAccordions.governance ? (
+                      <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+                    ) : (
+                      <ChevronRight className="w-3.5 h-3.5 text-gray-400" />
+                    )}
+                  </button>
+
+                  {sidebarAccordions.governance && (
+                    <div className="pl-6 space-y-1 border-l-2 border-[#EAD7E0] ml-3.5">
+                      <button
+                        type="button"
+                        onClick={() => setActiveView("CERTIFICATES")}
+                        className={`w-full text-left px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center justify-between ${
+                          activeView === "CERTIFICATES"
+                            ? "bg-[#7F3D59] text-white font-bold"
+                            : "text-gray-600 hover:bg-[#FDF8F9] hover:text-[#7F3D59]"
+                        }`}
+                      >
+                        <span>Issued Certificates</span>
+                        <span className="text-[10px] opacity-75 font-mono">{certificates.length}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setActiveView("SURVEYS")}
+                        className={`w-full text-left px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center justify-between ${
+                          activeView === "SURVEYS"
+                            ? "bg-[#7F3D59] text-white font-bold"
+                            : "text-gray-600 hover:bg-[#FDF8F9] hover:text-[#7F3D59]"
+                        }`}
+                      >
+                        <span>Evaluation Surveys</span>
+                        <span className="text-[10px] opacity-75 font-mono">{surveyResponses.length}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setActiveView("DIAGNOSTICS")}
+                        className={`w-full text-left px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1.5 ${
+                          activeView === "DIAGNOSTICS"
+                            ? "bg-[#7F3D59] text-white font-bold"
+                            : "text-gray-600 hover:bg-[#FDF8F9] hover:text-[#7F3D59]"
+                        }`}
+                      >
+                        <BarChart3 className="w-3.5 h-3.5" />
+                        <span>Item Diagnostics</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </>
             )}
-          </motion.div>
-        )}
 
-        {/* 3. LEARNERS & ANALYTICS TAB */}
-        {activeSection === "LEARNERS" && role === "ADMIN" && (
-          <motion.div
-            key="LEARNERS"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            className="space-y-6"
-          >
-            {/* SUB-VIEW A: COHORT PROGRESS */}
-            {learnerSubTab === "COHORT" && (
-              <div className="space-y-6">
+            {/* 5. FACULTY REVIEWS & ANNOTATIONS */}
+            <div className="pt-2 border-t border-[#EAD7E0]/60">
+              <button
+                type="button"
+                onClick={() => setActiveView("REVIEWS")}
+                className={`w-full text-left px-3 py-2 rounded-xl font-bold transition-colors flex items-center justify-between ${
+                  activeView === "REVIEWS"
+                    ? "bg-[#7F3D59] text-white shadow-xs"
+                    : "text-gray-700 hover:bg-[#FDF8F9] hover:text-[#7F3D59]"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <MessageSquareCheck className="w-4 h-4 text-[#D4AF37]" />
+                  <span>Reviewer Annotations</span>
+                </div>
+                {openCommentsCount > 0 && (
+                  <span
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                      activeView === "REVIEWS"
+                        ? "bg-white text-[#7F3D59]"
+                        : "bg-[#D4AF37] text-[#1D0B14]"
+                    }`}
+                  >
+                    {openCommentsCount}
+                  </span>
+                )}
+              </button>
+            </div>
+          </nav>
+
+          {/* Sidebar Footer Indicator */}
+          <div className="pt-4 border-t border-[#EAD7E0]/60 text-[11px] text-gray-500 space-y-2">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+              <span className="font-medium">System Online • AWIEF Core</span>
+            </div>
+            <div className="flex items-center justify-between pt-1 text-[10px]">
+              <Link href="/catalog" className="text-[#7F3D59] hover:underline font-bold">
+                Public Catalogue →
+              </Link>
+              <Link href="/dashboard" className="text-gray-500 hover:underline">
+                Dashboard
+              </Link>
+            </div>
+          </div>
+        </aside>
+
+        {/* MAIN WORKSPACE CONTENT */}
+        <main className="flex-1 min-w-0 w-full space-y-6">
+          <AnimatePresence mode="wait">
+            {/* VIEW 1: DEDICATED COURSE WORKSPACE */}
+            {activeView === "COURSE_DETAIL" && selectedCourse && (
+              <motion.div
+                key={`COURSE_DETAIL_${selectedCourse.id}`}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="space-y-6"
+              >
+                {/* Course Header Banner */}
+                <div className="bg-white p-6 rounded-3xl border border-[#EAD7E0] shadow-sm space-y-4">
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#7F3D59]/10 text-[#7F3D59]">
+                          {selectedCourse.category || "Masterclass"}
+                        </span>
+                        {selectedCourse.isNative ? (
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                            Native Interactive Modules
+                          </span>
+                        ) : (
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 text-purple-800 border border-purple-200">
+                            Interactive Workshop Package
+                          </span>
+                        )}
+                        <span className="text-xs text-gray-400 font-mono">ID: {selectedCourse.id}</span>
+                      </div>
+                      <h2 className="text-xl sm:text-2xl font-serif font-bold text-gray-900">
+                        {selectedCourse.title}
+                      </h2>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Author: <strong className="text-gray-700">{selectedCourse.authorName || "AWIEF Faculty"}</strong> • Royalty Rate: {selectedCourse.royaltyRate || 35}% • Tuition: {selectedCourse.isFree ? "Free" : `R${selectedCourse.priceZar?.toLocaleString()} / $${selectedCourse.priceUsd}`}
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Link
+                        href={`/course/${selectedCourse.id}`}
+                        target="_blank"
+                        className="px-4 py-2 bg-[#7F3D59] hover:bg-[#5E2C41] text-white text-xs font-bold rounded-xl transition-colors shadow-sm inline-flex items-center gap-1.5"
+                      >
+                        <PlayCircle className="w-3.5 h-3.5" />
+                        <span>Launch Course View</span>
+                      </Link>
+                      <button
+                        type="button"
+                        onClick={() => setActiveView("COURSES_BUILDER")}
+                        className="px-3.5 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition-colors inline-flex items-center gap-1.5"
+                      >
+                        <Layers className="w-3.5 h-3.5" />
+                        <span>All Courses</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Course Sub-Tab Navigation */}
+                  <div className="flex items-center gap-2 pt-3 border-t border-[#EAD7E0]/60 overflow-x-auto text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setCourseDetailSubTab("CURRICULUM")}
+                      className={`px-4 py-2 rounded-xl font-bold transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                        courseDetailSubTab === "CURRICULUM"
+                          ? "bg-[#7F3D59] text-white shadow-xs"
+                          : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                      }`}
+                    >
+                      <BookOpen className="w-3.5 h-3.5" />
+                      <span>Curriculum &amp; Learning Objectives</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setCourseDetailSubTab("ROSTER")}
+                      className={`px-4 py-2 rounded-xl font-bold transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                        courseDetailSubTab === "ROSTER"
+                          ? "bg-[#7F3D59] text-white shadow-xs"
+                          : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                      }`}
+                    >
+                      <Users className="w-3.5 h-3.5" />
+                      <span>Course Roster &amp; User Management</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setCourseDetailSubTab("QUIZZES")}
+                      className={`px-4 py-2 rounded-xl font-bold transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                        courseDetailSubTab === "QUIZZES"
+                          ? "bg-[#7F3D59] text-white shadow-xs"
+                          : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                      }`}
+                    >
+                      <HelpCircle className="w-3.5 h-3.5" />
+                      <span>Course Quizzes &amp; Assessments</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Sub-Tab 1: Curriculum & Learning Objectives */}
+                {courseDetailSubTab === "CURRICULUM" && (
+                  <div className="space-y-4">
+                    <div className="bg-white p-6 rounded-3xl border border-[#EAD7E0] shadow-sm">
+                      <h3 className="font-serif font-bold text-gray-900 text-base mb-1">
+                        Course Pedagogical Blueprint &amp; Syllabus
+                      </h3>
+                      <p className="text-xs text-gray-500 mb-6">
+                        Each bite-sized module is designed for 20-30 minute completion, paired with pan-African case studies and practical templates.
+                      </p>
+
+                      {selectedCourseModules.length === 0 ? (
+                        <div className="p-8 text-center text-gray-500 bg-[#FDF8F9] rounded-2xl border border-[#EAD7E0] text-xs">
+                          No native modules defined for this masterclass yet.
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          {selectedCourseModules.map((mod: any, index: number) => (
+                            <div
+                              key={mod.id || index}
+                              className="p-5 rounded-2xl border border-[#EAD7E0] bg-[#FDF8F9]/50 hover:bg-[#FDF8F9] transition-colors space-y-3"
+                            >
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                <div>
+                                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#7F3D59]">
+                                    Module {index + 1}
+                                  </span>
+                                  <h4 className="font-serif font-bold text-gray-900 text-sm">
+                                    {mod.title}
+                                  </h4>
+                                </div>
+                                <span className="text-xs font-mono font-bold text-gray-500 bg-white px-2.5 py-1 rounded-lg border border-gray-200 shrink-0">
+                                  {mod.duration || "25 mins"}
+                                </span>
+                              </div>
+
+                              <p className="text-xs text-gray-600 leading-relaxed">
+                                {mod.summary}
+                              </p>
+
+                              {mod.caseStudy && (
+                                <div className="bg-white p-3.5 rounded-xl border border-gray-200 text-xs">
+                                  <strong className="text-gray-900 block font-serif mb-1">
+                                    Pan-African Enterprise Case Study:
+                                  </strong>
+                                  <p className="text-gray-600 italic">
+                                    {typeof mod.caseStudy === "string"
+                                      ? mod.caseStudy
+                                      : mod.caseStudy.summary || mod.caseStudy.title}
+                                  </p>
+                                </div>
+                              )}
+
+                              {mod.keyTakeaways && mod.keyTakeaways.length > 0 && (
+                                <div className="space-y-1.5 text-xs">
+                                  <strong className="text-gray-700 block text-[11px] uppercase tracking-wider">
+                                    Learning Objectives &amp; Core Takeaways:
+                                  </strong>
+                                  <ul className="list-disc list-inside space-y-1 text-gray-600 pl-1">
+                                    {mod.keyTakeaways.map((takeaway: string, tIdx: number) => (
+                                      <li key={tIdx}>{takeaway}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+
+                              {mod.templateName && (
+                                <div className="flex items-center gap-2 text-xs font-medium text-[#7F3D59] bg-[#7F3D59]/10 px-3 py-2 rounded-xl">
+                                  <Download className="w-3.5 h-3.5 text-[#7F3D59]" />
+                                  <span>Downloadable Toolkit Template: {mod.templateName}</span>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Sub-Tab 2: Course-Scoped User Management */}
+                {courseDetailSubTab === "ROSTER" && (
+                  <div className="space-y-4">
+                    <CourseUserManagement
+                      initialCourseId={selectedCourse.id}
+                      allCourses={courses}
+                      allUsers={students}
+                      onRefreshParent={() => window.location.reload()}
+                    />
+                  </div>
+                )}
+
+                {/* Sub-Tab 3: Course-Scoped Quizzes */}
+                {courseDetailSubTab === "QUIZZES" && (
+                  <div className="space-y-4">
+                    <QuizManagementTab
+                      courses={courses}
+                      initialCourseId={selectedCourse.id}
+                    />
+                  </div>
+                )}
+              </motion.div>
+            )}
+
+            {/* VIEW 2: COURSE-SCORED ROSTER (ALL COURSES) */}
+            {activeView === "COURSE_ROSTER" && (
+              <motion.div
+                key="COURSE_ROSTER"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="space-y-6"
+              >
+                <CourseUserManagement
+                  initialCourseId="ALL"
+                  allCourses={courses}
+                  allUsers={students}
+                  onRefreshParent={() => window.location.reload()}
+                />
+              </motion.div>
+            )}
+
+            {/* VIEW 3: COURSES BUILDER TAB */}
+            {activeView === "COURSES_BUILDER" && (
+              <motion.div
+                key="COURSES_BUILDER"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+              >
+                <CourseManagementTab
+                  courses={courses}
+                  onRefresh={() => window.location.reload()}
+                  onManageCourseQuizzes={handleOpenCourseQuizzes}
+                  onSelectCourse={handleSelectCourseWorkspace}
+                />
+              </motion.div>
+            )}
+
+            {/* VIEW 4: COURSES QUIZZES TAB */}
+            {activeView === "COURSES_QUIZZES" && (
+              <motion.div
+                key="COURSES_QUIZZES"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+              >
+                <QuizManagementTab
+                  courses={courses}
+                  initialCourseId={courseQuizFilter}
+                />
+              </motion.div>
+            )}
+
+            {/* VIEW 5: ROYALTIES & FINANCIAL STATEMENTS */}
+            {(activeView === "ROYALTIES" || activeView === "TRANSACTIONS") && (
+              <motion.div
+                key="ROYALTIES"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+              >
+                <RoyaltiesTab transactions={transactions} courses={courses} />
+              </motion.div>
+            )}
+
+            {/* VIEW 6: COHORT OVERVIEW & KPIS */}
+            {activeView === "COHORT" && (
+              <motion.div
+                key="COHORT"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="space-y-6"
+              >
                 {/* Analytics Dashboard KPI Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <div className="bg-white rounded-2xl shadow-sm border border-[#EAD7E0] p-6 flex items-center">
@@ -537,7 +943,7 @@ export default function AdminClient({ initialData }: AdminClientProps) {
                   </div>
                 </div>
 
-                {/* Main Table */}
+                {/* Main Cohort Table */}
                 <div className="bg-white shadow-sm rounded-2xl border border-[#EAD7E0] overflow-hidden">
                   <div className="px-6 py-5 border-b border-[#EAD7E0] flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-[#FDF8F9]">
                     <div>
@@ -597,15 +1003,20 @@ export default function AdminClient({ initialData }: AdminClientProps) {
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-100">
                         {filteredStudents.map((student: any) => (
-                          <tr key={student.id} className="hover:bg-gray-50">
+                          <tr
+                            key={student.id}
+                            onClick={() => setInspectStudentId(student.id)}
+                            className="hover:bg-gray-50 cursor-pointer transition-colors"
+                          >
                             <td className="px-6 py-4 whitespace-nowrap">
                               <div className="flex items-center">
                                 <div className="flex-shrink-0 h-9 w-9 bg-[#7F3D59] text-white rounded-full flex items-center justify-center font-bold text-xs">
                                   {student.name ? student.name[0].toUpperCase() : "S"}
                                 </div>
                                 <div className="ml-3">
-                                  <div className="font-bold text-gray-900">
-                                    {student.name || "Anonymous Founder"}
+                                  <div className="font-bold text-gray-900 hover:text-[#7F3D59] flex items-center gap-1">
+                                    <span>{student.name || "Anonymous Founder"}</span>
+                                    <Eye className="w-3 h-3 text-gray-400" />
                                   </div>
                                   <div className="text-[11px] text-gray-500">
                                     {student.organization || student.email}
@@ -669,12 +1080,90 @@ export default function AdminClient({ initialData }: AdminClientProps) {
                     </table>
                   </div>
                 </div>
-              </div>
+              </motion.div>
             )}
 
-            {/* SUB-VIEW B: SURVEYS */}
-            {learnerSubTab === "SURVEYS" && (
-              <div className="space-y-6">
+            {/* VIEW 7: STAFF ACCOUNTS & ROLES */}
+            {activeView === "STAFF_USERS" && (
+              <motion.div
+                key="STAFF_USERS"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+              >
+                <UserManagementTab />
+              </motion.div>
+            )}
+
+            {/* VIEW 8: ISSUED CERTIFICATES REGISTRY */}
+            {activeView === "CERTIFICATES" && (
+              <motion.div
+                key="CERTIFICATES"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="bg-white rounded-2xl shadow-sm border border-[#EAD7E0] overflow-hidden"
+              >
+                <div className="px-6 py-4 bg-[#FDF8F9] border-b border-[#EAD7E0] flex justify-between items-center">
+                  <h3 className="font-serif font-bold text-gray-900">
+                    Official Issued Certificates Registry
+                  </h3>
+                  <span className="text-xs text-gray-500">{certificates.length} Issued</span>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200 text-xs">
+                    <thead className="bg-[#FDF8F9] text-[11px] font-bold uppercase tracking-wider text-gray-500">
+                      <tr>
+                        <th className="px-6 py-3 text-left">Founder Recipient</th>
+                        <th className="px-6 py-3 text-left">Masterclass</th>
+                        <th className="px-6 py-3 text-left">Certificate ID</th>
+                        <th className="px-6 py-3 text-left">Issue Date</th>
+                        <th className="px-6 py-3 text-right">Verification</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 bg-white">
+                      {certificates.map((c: any) => (
+                        <tr key={c.id} className="hover:bg-gray-50">
+                          <td className="px-6 py-4 whitespace-nowrap font-bold text-gray-900">
+                            {c.recipientName}
+                          </td>
+                          <td className="px-6 py-4 text-gray-700 max-w-xs truncate">
+                            {c.courseTitle}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap font-mono text-xs font-bold text-[#7F3D59]">
+                            {c.certificateNumber}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-gray-500 text-xs">
+                            {new Date(c.issuedAt).toLocaleDateString()}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-right text-xs">
+                            <Link
+                              href={`/verify/${c.certificateNumber}`}
+                              target="_blank"
+                              className="text-[#7F3D59] hover:underline font-bold inline-flex items-center gap-1"
+                            >
+                              <span>Verify Link</span>
+                              <ExternalLink className="w-3 h-3" />
+                            </Link>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </motion.div>
+            )}
+
+            {/* VIEW 9: COURSE EVALUATION SURVEYS */}
+            {activeView === "SURVEYS" && (
+              <motion.div
+                key="SURVEYS"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="space-y-6"
+              >
                 <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
                   <div className="bg-white p-5 rounded-2xl shadow-sm border border-[#EAD7E0]">
                     <p className="text-xs text-gray-500 font-bold uppercase">
@@ -797,66 +1286,18 @@ export default function AdminClient({ initialData }: AdminClientProps) {
                     ))}
                   </div>
                 </div>
-              </div>
+              </motion.div>
             )}
 
-            {/* SUB-VIEW C: CERTIFICATES */}
-            {learnerSubTab === "CERTIFICATES" && (
-              <div className="bg-white rounded-2xl shadow-sm border border-[#EAD7E0] overflow-hidden">
-                <div className="px-6 py-4 bg-[#FDF8F9] border-b border-[#EAD7E0] flex justify-between items-center">
-                  <h3 className="font-serif font-bold text-gray-900">
-                    Official Issued Certificates Registry
-                  </h3>
-                  <span className="text-xs text-gray-500">{certificates.length} Issued</span>
-                </div>
-
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200 text-xs">
-                    <thead className="bg-[#FDF8F9] text-[11px] font-bold uppercase tracking-wider text-gray-500">
-                      <tr>
-                        <th className="px-6 py-3 text-left">Founder Recipient</th>
-                        <th className="px-6 py-3 text-left">Masterclass</th>
-                        <th className="px-6 py-3 text-left">Certificate ID</th>
-                        <th className="px-6 py-3 text-left">Issue Date</th>
-                        <th className="px-6 py-3 text-right">Verification</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100 bg-white">
-                      {certificates.map((c: any) => (
-                        <tr key={c.id} className="hover:bg-gray-50">
-                          <td className="px-6 py-4 whitespace-nowrap font-bold text-gray-900">
-                            {c.recipientName}
-                          </td>
-                          <td className="px-6 py-4 text-gray-700 max-w-xs truncate">
-                            {c.courseTitle}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap font-mono text-xs font-bold text-[#7F3D59]">
-                            {c.certificateNumber}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-gray-500 text-xs">
-                            {new Date(c.issuedAt).toLocaleDateString()}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-right text-xs">
-                            <Link
-                              href={`/verify/${c.certificateNumber}`}
-                              target="_blank"
-                              className="text-[#7F3D59] hover:underline font-bold inline-flex items-center gap-1"
-                            >
-                              <span>Verify Link</span>
-                              <ExternalLink className="w-3 h-3" />
-                            </Link>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {/* SUB-VIEW D: QUIZ DIAGNOSTICS */}
-            {learnerSubTab === "DIAGNOSTICS" && (
-              <div className="space-y-6">
+            {/* VIEW 10: ASSESSMENT ITEM DIAGNOSTICS */}
+            {activeView === "DIAGNOSTICS" && (
+              <motion.div
+                key="DIAGNOSTICS"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="space-y-6"
+              >
                 <div className="bg-gradient-to-r from-[#5E2C41] to-[#7F3D59] rounded-2xl shadow-md p-6 text-white border border-[#D4AF37]/30">
                   <h3 className="text-xl font-serif font-bold text-white">
                     Assessment Item Diagnostics
@@ -906,53 +1347,51 @@ export default function AdminClient({ initialData }: AdminClientProps) {
                     ))}
                   </div>
                 )}
-              </div>
+              </motion.div>
             )}
-          </motion.div>
-        )}
 
-        {/* 4. USER MANAGEMENT TAB */}
-        {activeSection === "USERS" && role === "ADMIN" && (
-          <motion.div
-            key="USERS"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-          >
-            <UserManagementTab />
-          </motion.div>
-        )}
-
-        {/* 5. QUALITY & REVIEWS TAB */}
-        {activeSection === "REVIEWS" && (
-          <motion.div
-            key="REVIEWS"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            className="space-y-6"
-          >
-            <div className="bg-[#1D0B14] rounded-2xl shadow-md p-6 text-white flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 border border-[#3E1A29]">
-              <div>
-                <h3 className="text-xl font-serif font-bold text-white">
-                  Course Review &amp; Faculty Annotations
-                </h3>
-                <p className="text-gray-300 text-xs mt-1">
-                  Faculty authors and external reviewers can leave editorial and pedagogical recommendations directly in SCORM modules.
-                </p>
-              </div>
-              <Link
-                href="/course/investment-readiness?mode=review"
-                className="px-5 py-2.5 bg-[#D4AF37] text-[#1D0B14] font-serif font-bold rounded-xl shadow-sm hover:bg-[#B89628] transition-colors text-xs flex items-center justify-center shrink-0"
+            {/* VIEW 11: QUALITY & FACULTY REVIEWS */}
+            {activeView === "REVIEWS" && (
+              <motion.div
+                key="REVIEWS"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="space-y-6"
               >
-                <span>Launch Review Mode →</span>
-              </Link>
-            </div>
+                <div className="bg-[#1D0B14] rounded-2xl shadow-md p-6 text-white flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 border border-[#3E1A29]">
+                  <div>
+                    <h3 className="text-xl font-serif font-bold text-white">
+                      Course Review &amp; Faculty Annotations
+                    </h3>
+                    <p className="text-gray-300 text-xs mt-1">
+                      Faculty authors and external reviewers can leave editorial and pedagogical recommendations directly in interactive modules.
+                    </p>
+                  </div>
+                  <Link
+                    href="/course/investment-readiness?mode=review"
+                    className="px-5 py-2.5 bg-[#D4AF37] text-[#1D0B14] font-serif font-bold rounded-xl shadow-sm hover:bg-[#B89628] transition-colors text-xs flex items-center justify-center shrink-0"
+                  >
+                    <span>Launch Review Mode →</span>
+                  </Link>
+                </div>
 
-            <ReviewList comments={courseComments} handleResolve={handleResolve} />
-          </motion.div>
-        )}
-      </AnimatePresence>
+                <ReviewList comments={courseComments} handleResolve={handleResolve} />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </main>
+      </div>
+
+      {/* 360° SINGLE STUDENT PROFILER DRAWER */}
+      {inspectStudentId && (
+        <StudentProfileDrawer
+          userId={inspectStudentId}
+          allCourses={courses}
+          onClose={() => setInspectStudentId(null)}
+          onRefreshParent={() => window.location.reload()}
+        />
+      )}
     </div>
   );
 }

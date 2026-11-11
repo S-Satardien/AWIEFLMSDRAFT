@@ -10,7 +10,7 @@ export async function getDashboardData() {
 
   const userId = (session.user as any).id;
 
-  // Get user details
+  // Get user details with full relationships
   const user = await prisma.user.findUnique({
     where: { id: userId },
     include: {
@@ -23,6 +23,9 @@ export async function getDashboardData() {
         },
       },
       quizAttempts: true,
+      transactions: {
+        orderBy: { createdAt: "desc" }
+      }
     },
   });
 
@@ -48,17 +51,27 @@ export async function getDashboardData() {
     const hasSurvey = Boolean(enrollment.surveyCompleted || enrollment.surveyResponse);
     const hasCertificate = Boolean(enrollment.certificate);
 
+    // Find latest transaction for this course
+    const tx = user.transactions.find((t) => t.courseId === enrollment.courseId);
+
     return {
       id: enrollment.courseId,
       title: enrollment.course.title,
       category: enrollment.course.category || "Masterclass",
       duration: enrollment.course.duration || "Self-Paced",
-      instructor: enrollment.course.instructor || "VACFA / NISH Faculty",
+      instructor: enrollment.course.instructor || enrollment.course.authorName || "AWIEF Faculty",
       progress: Math.min(100, progress),
       isComplete,
       surveyCompleted: hasSurvey,
       certificateNumber: enrollment.certificate?.certificateNumber || null,
       lastAccess: enrollment.lastAccess,
+      receipt: tx ? {
+        reference: tx.reference,
+        gateway: tx.gateway,
+        amountZar: tx.amountZar,
+        currency: tx.currency,
+        createdAt: tx.createdAt.toISOString()
+      } : null
     };
   });
 
@@ -140,8 +153,10 @@ export async function getDashboardData() {
     userEmail: user.email,
     userCountry: user.country,
     organization: user.organization,
-    isNitagMember: user.isNitagMember,
-    nitagPosition: user.nitagPosition,
+    profession: user.profession,
+    businessStage: user.businessStage,
+    sector: user.sector,
+    headline: user.headline,
     enrolledCourses,
     totalCourses,
     completedCourses,
@@ -198,6 +213,8 @@ export async function getLeaderboard() {
       id: u.id,
       name: u.name,
       country: u.country,
+      organization: u.organization,
+      profession: u.profession,
       showOnLeaderboard: u.showOnLeaderboard,
       points,
       coursesEnrolled: u.enrollments.length,
@@ -216,36 +233,48 @@ export async function getLeaderboard() {
           ? l.name
           : `Specialist #${l.id.substring(l.id.length - 4).toUpperCase()}`,
       displayCountry: l.showOnLeaderboard ? l.country : null,
+      displayOrg: l.showOnLeaderboard ? l.organization : null,
     }))
     .slice(0, 5);
 }
 
-
 export async function getMyCoursesList() {
   const session = await getServerSession(authOptions);
-  if (!session?.user) return [];
+  if (!session?.user) return { enrolled: [], available: [] };
 
   const userId = (session.user as any).id;
 
-  const courses = await prisma.course.findMany({
-    orderBy: { createdAt: "asc" }
-  });
-
-  const enrollments = await prisma.enrollment.findMany({
-    where: { userId },
-    include: {
-      scormState: true,
-      certificate: true,
-      surveyResponse: true
-    }
-  });
+  const [courses, enrollments, userTxs, allQuizzes, userAttempts] = await Promise.all([
+    prisma.course.findMany({
+      where: { isPublished: true },
+      orderBy: { createdAt: "asc" }
+    }),
+    prisma.enrollment.findMany({
+      where: { userId },
+      include: {
+        scormState: true,
+        certificate: true,
+        surveyResponse: true
+      }
+    }),
+    prisma.transaction.findMany({
+      where: { userId },
+      orderBy: { createdAt: "desc" }
+    }),
+    prisma.quiz.findMany(),
+    prisma.quizAttempt.findMany({
+      where: { userId, passed: true }
+    })
+  ]);
 
   const enrollmentMap = new Map();
   for (const e of enrollments) {
     enrollmentMap.set(e.courseId, e);
   }
 
-  return courses.map((course) => {
+  const passedQuizIds = new Set(userAttempts.map((a) => a.quizId));
+
+  const allProcessed = courses.map((course) => {
     const enrollment = enrollmentMap.get(course.id);
     let progress = enrollment?.progress || 0;
     
@@ -263,18 +292,52 @@ export async function getMyCoursesList() {
       }
     }
 
+    // Attached quizzes for this course
+    const courseQuizzes = allQuizzes.filter((q) => q.courseId === course.id);
+    const passedCount = courseQuizzes.filter((q) => passedQuizIds.has(q.quizKey) || passedQuizIds.has(q.id.toString())).length;
+
+    // Latest receipt
+    const tx = userTxs.find((t) => t.courseId === course.id);
+
+    // Number of modules
+    let moduleCount = 4;
+    if (course.modulesJson) {
+      try {
+        const parsed = JSON.parse(course.modulesJson);
+        if (Array.isArray(parsed)) moduleCount = parsed.length;
+      } catch (e) {}
+    }
+
     return {
       id: course.id,
       title: course.title,
       shortDescription: course.shortDescription || course.description,
       category: course.category,
       duration: course.duration,
-      instructor: course.instructor,
+      instructor: course.authorName || course.instructor || "AWIEF Faculty",
+      authorRole: course.authorRole || course.instructorRole || "Lead Faculty",
+      priceZar: course.priceZar,
+      priceUsd: course.priceUsd,
+      isFree: course.isFree,
       isEnrolled: !!enrollment,
       progress: Math.min(100, Math.round(progress)),
       surveyCompleted: !!enrollment?.surveyCompleted || !!enrollment?.surveyResponse,
-      certificateNumber: enrollment?.certificate?.certificateNumber || null
+      certificateNumber: enrollment?.certificate?.certificateNumber || null,
+      moduleCount,
+      totalQuizzes: courseQuizzes.length,
+      passedQuizzes: passedCount,
+      receipt: tx ? {
+        reference: tx.reference,
+        gateway: tx.gateway,
+        amountZar: tx.amountZar,
+        currency: tx.currency,
+        createdAt: tx.createdAt.toISOString()
+      } : null
     };
   });
-}
 
+  return {
+    enrolled: allProcessed.filter((c) => c.isEnrolled),
+    available: allProcessed.filter((c) => !c.isEnrolled)
+  };
+}

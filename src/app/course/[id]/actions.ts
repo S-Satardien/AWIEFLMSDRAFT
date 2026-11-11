@@ -196,25 +196,79 @@ export async function getEnrollmentId(userId: string, courseId: string, createIf
 }
 
 /**
- * Retrieves the comprehensive course enrollment status including survey and certificate records.
+ * Retrieves all quizzes belonging to a specific course and the learner's attempt history.
+ *
+ * @param {string} courseId - Course ID.
+ * @param {string} userId - Optional user ID.
+ * @returns {Promise<{ quizzes: any[]; attempts: any[] }>} Course quizzes and attempt grades.
+ */
+export async function getCourseQuizzesAndGrades(courseId: string, userId?: string) {
+  const quizzes = await prisma.quiz.findMany({
+    where: { courseId },
+    orderBy: { id: "asc" }
+  });
+
+  const parsedQuizzes = quizzes.map((q) => {
+    let questions = [];
+    try {
+      questions = JSON.parse(q.questionsJson);
+    } catch (e) {
+      questions = [];
+    }
+    return {
+      id: q.quizKey,
+      dbId: q.id,
+      courseId: q.courseId,
+      name: q.name,
+      intro: q.intro,
+      questions
+    };
+  });
+
+  let attempts: any[] = [];
+  if (userId && parsedQuizzes.length > 0) {
+    attempts = await prisma.quizAttempt.findMany({
+      where: {
+        userId,
+        quizId: { in: parsedQuizzes.map((q) => q.id) }
+      },
+      orderBy: { createdAt: "desc" }
+    });
+  }
+
+  return { quizzes: parsedQuizzes, attempts };
+}
+
+/**
+ * Submits a graded assessment attempt directly within the course player.
  *
  * @param {string} userId - User ID.
- * @param {string} courseId - Course ID.
- * @returns {Promise<any>} Enrollment record.
+ * @param {string} quizId - Quiz Key / ID.
+ * @param {number} score - Points earned.
+ * @param {number} maxScore - Maximum possible points.
+ * @param {string} details - JSON string of question-level answers.
+ * @returns {Promise<{ passed: boolean; percentage: number }>} Assessment result.
  */
-export async function getCourseEnrollmentStatus(userId: string, courseId: string) {
-  const enrollment = await prisma.enrollment.findUnique({
-    where: {
-      userId_courseId: {
-        userId,
-        courseId
-      }
-    },
-    include: {
-      certificate: true,
-      surveyResponse: true
+export async function submitCourseQuizAttempt(
+  userId: string,
+  quizId: string,
+  score: number,
+  maxScore: number,
+  details?: string
+) {
+  const percentage = maxScore > 0 ? Math.round((score / maxScore) * 100) : 0;
+  const passed = percentage >= 80;
+
+  await prisma.quizAttempt.create({
+    data: {
+      userId,
+      quizId,
+      score,
+      maxScore,
+      passed,
+      details,
     }
   });
 
-  return enrollment;
+  return { passed, percentage };
 }

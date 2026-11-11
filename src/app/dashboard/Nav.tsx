@@ -40,7 +40,7 @@ export default function DashboardNav() {
   ];
 
   if (role === 'ADMIN') {
-    navItems.push({ name: "Admin & Royalties", href: "/admin" });
+    navItems.push({ name: "Admin", href: "/admin" });
   } else if (role === 'REVIEWER') {
     navItems.push({ name: "Author & Reviewer Portal", href: "/admin" });
   }

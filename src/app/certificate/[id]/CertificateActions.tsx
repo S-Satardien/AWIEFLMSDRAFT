@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Check, Link as LinkIcon, ShieldCheck, Printer } from "lucide-react";
+import { Check, LinkIcon, ShieldCheck, Printer } from "@/components/Icons";
 
 /**
  * Certificate Action Header Bar providing quick access to:

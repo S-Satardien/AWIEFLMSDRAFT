@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import { useParams, useSearchParams } from 'next/navigation';
@@ -11,6 +11,8 @@ import {
   setScormState,
   getCourseDetails,
   updateNativeModuleProgress,
+  getCourseQuizzesAndGrades,
+  submitCourseQuizAttempt,
 } from './actions';
 import {
   addReviewComment,
@@ -18,7 +20,27 @@ import {
   updateReviewComment,
   deleteReviewComment,
 } from './reviewActions';
-import { Wifi, Zap, Award, Check, Mic, Globe, Download, X } from 'lucide-react';
+import {
+  Wifi,
+  Zap,
+  Award,
+  Check,
+  CheckCircle2,
+  Mic,
+  Globe,
+  Download,
+  X,
+  BookOpen,
+  FileText,
+  HelpCircle,
+  PlayCircle,
+  Layers,
+  ChevronDown,
+  ChevronRight,
+  ShieldCheck,
+  Sparkles,
+  ArrowRight
+} from '@/components/Icons';
 
 interface ModuleData {
   id: string;
@@ -26,37 +48,18 @@ interface ModuleData {
   duration: string;
   videoUrl?: string;
   summary: string;
-  topics?: string[];
-  caseStudy?: {
-    title: string;
-    founder?: string;
-    country?: string;
-    summary?: string;
-    keyTakeaway?: string;
-  };
-  practicalTemplate?: {
-    title: string;
-    format: string;
-    content?: string;
-  };
-  quiz?: {
-    title: string;
-    questionCount: number;
-    questions?: Array<{
-      id: string;
-      question: string;
-      options: string[];
-      correctAnswer: number;
-      explanation: string;
-    }>;
-  };
+  keyTakeaways?: string[];
+  learningObjectives?: string[];
+  caseStudy?: string;
+  templateName?: string;
+  quizPrompt?: string;
 }
 
 /**
- * Hybrid Course Player supporting both Native Bite-Sized Modular Masterclasses
- * and legacy SCORM 1.2 / 2004 interactive packages.
- * Includes low-bandwidth data saver mode, downloadable practical business templates,
- * inline module quick-checks, and reviewer annotation sidebars.
+ * Coursera-Style Masterclass Course Shell.
+ * Features a collapsible navigation drawer, structured module curriculum,
+ * interactive digital workshops, downloadable business toolkits, and
+ * graded module assessments embedded directly within each course.
  *
  * @returns {JSX.Element} The rendered course player.
  */
@@ -65,21 +68,36 @@ export default function CoursePlayerPage() {
   const params = useParams();
   const searchParams = useSearchParams();
   const isReviewMode = searchParams.get('mode') === 'review';
+  const initialTab = searchParams.get('tab');
 
   const [course, setCourse] = useState<any>(null);
   const [enrollmentId, setEnrollmentId] = useState<string | null>(null);
   const [isCompleted, setIsCompleted] = useState(false);
   const [progressPercent, setProgressPercent] = useState<number>(0);
-  const [isScormReady, setIsScormReady] = useState(false);
   const scormStateRef = useRef<Record<string, string>>({});
 
-  // Native player states
-  const [modules, setModules] = useState<ModuleData[]>([]);
+  // Coursera Navigation State
+  const [activeView, setActiveView] = useState<'MODULE' | 'SYLLABUS' | 'GRADES' | 'RESOURCES'>(
+    initialTab === 'grades' ? 'GRADES' : 'MODULE'
+  );
   const [activeModuleIndex, setActiveModuleIndex] = useState(0);
-  const [completedModules, setCompletedModules] = useState<string[]>([]);
+  const [expandedModules, setExpandedModules] = useState<Record<number, boolean>>({ 0: true });
+  const [activeLessonMode, setActiveLessonMode] = useState<'NATIVE' | 'SIMULATION'>('NATIVE');
   const [isLowBandwidth, setIsLowBandwidth] = useState(false);
-  const [quickCheckAnswers, setQuickCheckAnswers] = useState<Record<string, number>>({});
-  const [quickCheckSubmitted, setQuickCheckSubmitted] = useState<Record<string, boolean>>({});
+  const [isTheaterMode, setIsTheaterMode] = useState(false);
+
+  // Curriculum data
+  const [modules, setModules] = useState<ModuleData[]>([]);
+  const [completedModules, setCompletedModules] = useState<string[]>([]);
+
+  // Embedded Course Quizzes & Grades
+  const [courseQuizzes, setCourseQuizzes] = useState<any[]>([]);
+  const [quizAttempts, setQuizAttempts] = useState<any[]>([]);
+  const [activeQuizIndex, setActiveQuizIndex] = useState<number | null>(null);
+  const [quizAnswers, setQuizAnswers] = useState<Record<number, number>>({});
+  const [quizSubmitted, setQuizSubmitted] = useState(false);
+  const [quizScore, setQuizScore] = useState<{ score: number; maxScore: number; passed: boolean } | null>(null);
+  const [isSubmittingQuiz, setIsSubmittingQuiz] = useState(false);
 
   // Review Mode State
   const [comments, setComments] = useState<any[]>([]);
@@ -95,7 +113,7 @@ export default function CoursePlayerPage() {
     setComments(fetched);
   };
 
-  // Expose SCORM API for legacy packages
+  // Expose Runtime API for Interactive Simulation packages
   useEffect(() => {
     (window as any).API_1484_11 = {
       Initialize: () => "true",
@@ -126,70 +144,73 @@ export default function CoursePlayerPage() {
         return "true";
       },
       LMSCommit: () => "true",
-      LMSGetLastError: () => "0",
-      LMSGetErrorString: () => "",
-      LMSGetDiagnostic: () => ""
+      GetLastError: () => "0",
+      GetErrorString: () => "",
+      GetDiagnostic: () => ""
     };
   }, [enrollmentId]);
 
-  // Load course details and enrollment
+  // Load course details, enrollment & quizzes
   useEffect(() => {
     async function initCourse() {
       if (!params.id) return;
-      const courseData = await getCourseDetails(params.id as string);
+      const courseId = params.id as string;
+      const courseData = await getCourseDetails(courseId);
       setCourse(courseData);
 
       if (courseData?.modulesJson) {
         try {
           const parsed = JSON.parse(courseData.modulesJson);
-          setModules(parsed);
+          if (Array.isArray(parsed)) {
+            setModules(parsed);
+          }
         } catch (e) {
           console.error("Failed to parse modulesJson:", e);
         }
       }
 
-      if (!session?.user?.id) {
-        setIsScormReady(true);
-        return;
-      }
+      const userId = (session?.user as any)?.id;
+      const quizRes = await getCourseQuizzesAndGrades(courseId, userId);
+      setCourseQuizzes(quizRes.quizzes || []);
+      setQuizAttempts(quizRes.attempts || []);
 
-      const eId = await getEnrollmentId(session.user.id as string, params.id as string, true);
-      if (eId) {
-        setEnrollmentId(eId);
-        const state = await getScormState(eId);
-        scormStateRef.current = state;
+      if (userId) {
+        const eId = await getEnrollmentId(userId, courseId, true);
+        if (eId) {
+          setEnrollmentId(eId);
+          const state = await getScormState(eId);
+          scormStateRef.current = state;
 
-        // Restore native completed modules
-        if (state['awief.native.completed_modules']) {
-          try {
-            const completed = JSON.parse(state['awief.native.completed_modules']);
-            setCompletedModules(completed);
-          } catch (e) {}
-        }
+          if (state['awief.native.completed_modules']) {
+            try {
+              const completed = JSON.parse(state['awief.native.completed_modules']);
+              setCompletedModules(completed);
+            } catch (e) {}
+          }
 
-        const measure = parseFloat(state['cmi.progress_measure'] || '0');
-        const pVal = Math.round(measure <= 1.0 ? measure * 100 : measure);
-        setProgressPercent(pVal);
+          const measure = parseFloat(state['cmi.progress_measure'] || '0');
+          const pVal = Math.round(measure <= 1.0 ? measure * 100 : measure);
+          setProgressPercent(pVal);
 
-        if (
-          state['cmi.completion_status'] === 'completed' ||
-          state['cmi.core.lesson_status'] === 'completed' ||
-          pVal >= 100
-        ) {
-          setIsCompleted(true);
+          if (
+            state['cmi.completion_status'] === 'completed' ||
+            state['cmi.core.lesson_status'] === 'completed' ||
+            pVal >= 100
+          ) {
+            setIsCompleted(true);
+          }
         }
       }
 
       if (isReviewMode) {
         refreshComments();
       }
-      setIsScormReady(true);
     }
 
     initCourse();
   }, [session, params.id, isReviewMode]);
 
-  // Native module completion handler
+  // Handle module completion
   const handleCompleteCurrentModule = async () => {
     const currentModule = modules[activeModuleIndex];
     if (!currentModule || !enrollmentId) return;
@@ -206,35 +227,41 @@ export default function CoursePlayerPage() {
       setIsCompleted(true);
     }
 
-    // Advance to next module if available
+    // Advance to next module
     if (activeModuleIndex < modules.length - 1) {
       setActiveModuleIndex(activeModuleIndex + 1);
+      setExpandedModules(prev => ({ ...prev, [activeModuleIndex + 1]: true }));
+      setQuizSubmitted(false);
+      setQuizAnswers({});
+      setQuizScore(null);
     }
   };
 
-  // Download practical business template
-  const handleDownloadTemplate = (template: any) => {
+  // Practical Business Template Download
+  const handleDownloadTemplate = (templateName: string) => {
     const content = `
 ================================================================================
-AWIEF DIGITAL LEARNING ACADEMY | PRACTICAL BUSINESS TEMPLATE
+AWIEF DIGITAL LEARNING ACADEMY | PRACTICAL BUSINESS TOOLKIT
 Course: ${course?.title || "AWIEF Masterclass"}
-Module: ${modules[activeModuleIndex]?.title}
-Template: ${template.title} (${template.format})
+Module: ${modules[activeModuleIndex]?.title || "Executive Module"}
+Template: ${templateName}
+Learner: ${session?.user?.name || session?.user?.email || "AWIEF Pan-African Founder"}
 Date Generated: ${new Date().toLocaleDateString()}
-Learner: ${session?.user?.name || session?.user?.email || "AWIEF Entrepreneur"}
+Accreditation: United Nations ECOSOC Special Consultative Status
 ================================================================================
 
-1. EXECUTIVE OVERVIEW:
-This institutional framework was synthesized for African women entrepreneurs to accelerate readiness for investor due diligence, commercial banking covenants, and AfCFTA cross-border trade compliance.
+1. EXECUTIVE SUMMARY & OBJECTIVE:
+This institutional framework was authored by AWIEF Faculty to guide women entrepreneurs
+through investor due diligence, cashflow runway modeling, and cross-border trade compliance.
 
-2. CORE FRAMEWORK SECTIONS:
-- Section A: Corporate Governance & Legal Entity Verification
-- Section B: 3-Year Audited/Management Cashflows & Working Capital Forecasts
-- Section C: Product-Market Fit & Pan-African Unit Economics
-- Section D: Capital Requirements, Pre-Money Valuation & Use of Proceeds
+2. CORE OPERATING SECTIONS:
+- Section 1: Executive Governance, Entity Structuring & Shareholding
+- Section 2: 3-Year Integrated P&L, Balance Sheet & Working Capital Forecasts
+- Section 3: Pan-African Unit Economics, Customer Acquisition & Gross Margin Targets
+- Section 4: Target Capital Requirements, Valuation Benchmarks & Use of Proceeds
 
 3. PRACTICAL ACTION STEPS:
-[ ] Step 1: Populate all historical EBITDA and gross margin actuals.
+[ ] Step 1: Input your audited or management accounts for the trailing 12 months.
 [ ] Step 2: Assemble company incorporation papers, tax clearances, and AfCFTA certificates of origin.
 [ ] Step 3: Present this completed document to your AWIEF mentor or investor relations lead.
 
@@ -245,560 +272,769 @@ This institutional framework was synthesized for African women entrepreneurs to 
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `${template.title.toLowerCase().replace(/[^a-z0-9]/g, '_')}_template.txt`;
+    link.download = `${templateName.toLowerCase().replace(/[^a-z0-9]/g, '_')}_awief.txt`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
   };
 
-  // Quick check answer handler
-  const handleSelectOption = (questionId: string, optionIndex: number) => {
-    setQuickCheckAnswers((prev) => ({ ...prev, [questionId]: optionIndex }));
-  };
+  // Submit Embedded Module Assessment
+  const handleSubmitQuiz = async (quiz: any) => {
+    if (!quiz || !session?.user) return;
+    setIsSubmittingQuiz(true);
 
-  const handleCheckQuestion = (questionId: string) => {
-    setQuickCheckSubmitted((prev) => ({ ...prev, [questionId]: true }));
-  };
+    let correctCount = 0;
+    const questions = quiz.questions || [];
+    const details: Record<string, any> = {};
 
-  if (!course) {
-    return (
-      <div className="min-h-screen bg-[#1D0B14] text-white flex items-center justify-center">
-        <div className="text-center space-y-3">
-          <div className="w-10 h-10 border-4 border-[#D4AF37] border-t-transparent rounded-full animate-spin mx-auto"></div>
-          <p className="text-sm font-medium text-gray-300">Loading AWIEF Masterclass Engine...</p>
-        </div>
-      </div>
+    questions.forEach((q: any, qIdx: number) => {
+      const selectedAnswerIdx = quizAnswers[qIdx];
+      const selectedAnswer = q.answers ? q.answers[selectedAnswerIdx] : null;
+      const isCorrect = selectedAnswer ? Boolean(selectedAnswer.isCorrect) : false;
+
+      if (isCorrect) correctCount++;
+      details[q.id.toString()] = {
+        isCorrect,
+        selectedAnswerId: selectedAnswer?.id || null
+      };
+    });
+
+    const max = questions.length;
+    const res = await submitCourseQuizAttempt(
+      (session.user as any).id,
+      quiz.id,
+      correctCount,
+      max,
+      JSON.stringify(details)
     );
-  }
 
-  const isNative = course.isNative && modules.length > 0;
+    setQuizScore({ score: correctCount, maxScore: max, passed: res.passed });
+    setQuizSubmitted(true);
+    setIsSubmittingQuiz(false);
+
+    // Refresh attempts
+    const updated = await getCourseQuizzesAndGrades(course.id, (session.user as any).id);
+    setQuizAttempts(updated.attempts || []);
+  };
+
   const currentModule = modules[activeModuleIndex];
 
-  return (
-    <div className="min-h-screen bg-[#1D0B14] text-gray-100 flex flex-col">
-      {/* Top Navigation Bar */}
-      <header className="h-16 bg-[#16070E] border-b border-[#3E1A29] px-4 sm:px-6 flex items-center justify-between z-20 shrink-0">
-        <div className="flex items-center gap-4">
-          <Link
-            href="/dashboard"
-            className="flex items-center gap-2 text-xs font-semibold text-gray-400 hover:text-white transition-colors"
-          >
-            <span>←</span>
-            <span className="hidden sm:inline">My Academy</span>
-          </Link>
-          <div className="h-5 w-px bg-gray-800 hidden sm:block"></div>
-          <div className="flex items-center gap-3">
-            <span className="text-xs font-bold uppercase tracking-wider text-[#D4AF37] bg-[#7F3D59]/40 px-2.5 py-1 rounded-full border border-[#D4AF37]/30 hidden md:inline">
-              AWIEF Academy
-            </span>
-            <h1 className="text-sm sm:text-base font-serif font-bold text-white truncate max-w-xs sm:max-w-md lg:max-w-lg">
-              {course.title}
-            </h1>
-          </div>
-        </div>
+  // Map module to its embedded quiz
+  const currentModuleQuiz = useMemo(() => {
+    if (courseQuizzes.length === 0) return null;
+    // Match by module index or return course quiz
+    const idx = activeModuleIndex % courseQuizzes.length;
+    return courseQuizzes[idx] || courseQuizzes[0];
+  }, [courseQuizzes, activeModuleIndex]);
 
-        <div className="flex items-center gap-3">
-          {/* Low Bandwidth Toggle */}
-          {isNative && (
+  // Find attempt for current quiz
+  const currentQuizBestAttempt = useMemo(() => {
+    if (!currentModuleQuiz) return null;
+    return quizAttempts.find(a => a.quizId === currentModuleQuiz.id && a.passed) ||
+           quizAttempts.find(a => a.quizId === currentModuleQuiz.id) || null;
+  }, [currentModuleQuiz, quizAttempts]);
+
+  return (
+    <div className="min-h-screen bg-[#FDF8F9] flex flex-col selection:bg-[#7F3D59] selection:text-white">
+      {/* 1. COURSERA-STYLE TOP NAVIGATION STRIP */}
+      <header className="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-xs">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3 truncate">
+            <Link
+              href="/dashboard/courses"
+              className="p-2 text-gray-500 hover:text-gray-900 rounded-xl hover:bg-gray-100 transition-colors shrink-0"
+              title="Return to My Masterclasses"
+            >
+              ← Back
+            </Link>
+            <div className="h-6 w-[1px] bg-gray-200 shrink-0"></div>
+            <div className="truncate">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-[#7F3D59] block">
+                {course?.category || "Executive Masterclass"}
+              </span>
+              <h1 className="text-sm sm:text-base font-serif font-bold text-gray-900 truncate">
+                {course?.title || "Loading Masterclass..."}
+              </h1>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 shrink-0">
+            {/* Low-Bandwidth Mode Toggle */}
             <button
               onClick={() => setIsLowBandwidth(!isLowBandwidth)}
-              className={`text-xs px-3 py-1.5 rounded-full font-medium transition-all flex items-center gap-1.5 border ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
                 isLowBandwidth
-                  ? "bg-amber-900/60 text-amber-200 border-amber-500/50"
-                  : "bg-white/10 text-gray-300 hover:text-white border-white/10"
+                  ? "bg-amber-100 text-amber-900 border border-amber-300"
+                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
               }`}
-              title="Toggle Low-Bandwidth Mode for slower mobile connections"
+              title="Toggle Low-Bandwidth Data Saver mode for mobile connections"
             >
-              {isLowBandwidth ? (
-                <span className="flex items-center gap-1.5">
-                  <Wifi className="w-3.5 h-3.5 text-amber-300" />
-                  <span>Low-Data Active (-90% Data)</span>
-                </span>
-              ) : (
-                <span className="flex items-center gap-1.5">
-                  <Zap className="w-3.5 h-3.5 text-amber-400" />
-                  <span>Full Media Mode</span>
-                </span>
-              )}
+              <Wifi className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Data Saver</span>
             </button>
-          )}
 
-          {/* Progress Pill */}
-          <div className="hidden sm:flex items-center gap-2 bg-white/5 border border-white/10 px-3 py-1 rounded-full text-xs">
-            <div className="w-16 bg-gray-700 rounded-full h-2 overflow-hidden">
-              <div
-                className="bg-[#D4AF37] h-full transition-all duration-500"
-                style={{ width: `${progressPercent}%` }}
-              ></div>
+            {/* Overall Progress Pill */}
+            <div className="hidden md:flex items-center gap-2 px-3 py-1 bg-[#FDF8F9] border border-[#EAD7E0] rounded-xl text-xs">
+              <span className="text-gray-500 font-medium">Curriculum:</span>
+              <span className="font-bold text-[#7F3D59] font-mono">{progressPercent}%</span>
             </div>
-            <span className="font-mono text-[#D4AF37] font-bold">{progressPercent}%</span>
+
+            {/* Certificate Quick Link if 100% */}
+            {progressPercent >= 100 && (
+              <Link
+                href={`/certificate/${course?.id}`}
+                className="px-3 py-1.5 bg-[#7F3D59] hover:bg-[#5E2C41] text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5"
+              >
+                <Award className="w-3.5 h-3.5 text-[#D4AF37]" />
+                <span className="hidden sm:inline">Credential</span>
+              </Link>
+            )}
           </div>
-
-          {/* Survey / Certificate CTA when complete */}
-          {(isCompleted || progressPercent >= 100) && (
-            <Link
-              href={`/course/${course.id}/survey`}
-              className="px-3.5 py-1.5 bg-[#D4AF37] hover:bg-[#B89628] text-[#1D0B14] font-serif font-bold text-xs rounded-full shadow-md transition-all animate-pulse inline-flex items-center gap-1.5"
-            >
-              <Award className="w-3.5 h-3.5 text-[#1D0B14]" />
-              <span>Claim Verifiable Certificate →</span>
-            </Link>
-          )}
-
-          {/* Review Mode Toggle (for Admin/Reviewer) */}
-          {session?.user && ((session.user as any).role === 'ADMIN' || (session.user as any).role === 'REVIEWER') && (
-            <button
-              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="text-xs px-2.5 py-1.5 rounded-lg bg-[#7F3D59] hover:bg-[#5E2C41] text-white font-medium transition-colors"
-            >
-              {isSidebarOpen ? "Hide Reviewer Panel" : "Reviewer Annotations"}
-            </button>
-          )}
         </div>
       </header>
 
-      {/* Main Player Body */}
-      {isNative ? (
-        /* NATIVE MODULAR PLAYER */
-        <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
-          {/* Left Module Syllabus Sidebar */}
-          <aside className="w-full md:w-80 lg:w-96 bg-[#16070E] border-r border-[#3E1A29] flex flex-col shrink-0 overflow-y-auto">
-            <div className="p-4 border-b border-[#3E1A29]">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs font-bold uppercase tracking-wider text-gray-400">Curriculum Syllabus</span>
-                <span className="text-xs text-[#D4AF37] font-mono">{completedModules.length} / {modules.length} Done</span>
-              </div>
-              <p className="text-xs text-gray-500">20–30 min bite-sized entrepreneur modules</p>
+      {/* 2. COURSERA-STYLE TWO-COLUMN WORKSPACE */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 w-full flex flex-col lg:flex-row gap-6">
+        
+        {/* LEFT COURSE NAVIGATION DRAWER (COURSERA SIDEBAR) */}
+        <aside className="w-full lg:w-80 shrink-0 space-y-4">
+          <div className="bg-white rounded-3xl p-5 border border-[#EAD7E0] shadow-sm space-y-4">
+            
+            {/* Primary View Switcher Tabs */}
+            <div className="grid grid-cols-2 gap-1 bg-[#FDF8F9] p-1 rounded-2xl border border-[#EAD7E0] text-xs font-bold">
+              <button
+                onClick={() => setActiveView('MODULE')}
+                className={`py-2 px-3 rounded-xl transition-colors ${
+                  activeView === 'MODULE'
+                    ? 'bg-[#7F3D59] text-white shadow-xs'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                Curriculum
+              </button>
+              <button
+                onClick={() => setActiveView('GRADES')}
+                className={`py-2 px-3 rounded-xl transition-colors ${
+                  activeView === 'GRADES'
+                    ? 'bg-[#7F3D59] text-white shadow-xs'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                Grades &amp; Quizzes
+              </button>
             </div>
 
-            <div className="divide-y divide-[#3E1A29]/60">
-              {modules.map((m, idx) => {
-                const isActive = idx === activeModuleIndex;
-                const isDone = completedModules.includes(m.id);
+            {/* Additional Views */}
+            <div className="flex items-center justify-between text-xs font-semibold text-gray-500 border-b border-gray-100 pb-3">
+              <button
+                onClick={() => setActiveView('SYLLABUS')}
+                className={`hover:text-[#7F3D59] transition-colors ${
+                  activeView === 'SYLLABUS' ? 'text-[#7F3D59] font-bold' : ''
+                }`}
+              >
+                Objectives &amp; Syllabus
+              </button>
+              <button
+                onClick={() => setActiveView('RESOURCES')}
+                className={`hover:text-[#7F3D59] transition-colors ${
+                  activeView === 'RESOURCES' ? 'text-[#7F3D59] font-bold' : ''
+                }`}
+              >
+                Toolkits &amp; Downloads
+              </button>
+            </div>
 
-                return (
-                  <button
-                    key={m.id || idx}
-                    onClick={() => setActiveModuleIndex(idx)}
-                    className={`w-full p-4 text-left transition-colors flex items-start gap-3 ${
-                      isActive
-                        ? "bg-[#7F3D59]/30 border-l-4 border-[#D4AF37]"
-                        : "hover:bg-white/5"
-                    }`}
-                  >
-                    <span
-                      className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 mt-0.5 ${
-                        isDone
-                          ? "bg-emerald-600 text-white"
-                          : isActive
-                          ? "bg-[#D4AF37] text-[#1D0B14]"
-                          : "bg-gray-800 text-gray-400"
+            {/* EXPANDABLE MODULE LIST */}
+            {activeView === 'MODULE' && (
+              <div className="space-y-2">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 px-1">
+                  Bite-Sized Modules ({modules.length})
+                </p>
+
+                {modules.map((mod, idx) => {
+                  const isCurrent = activeModuleIndex === idx;
+                  const isDone = completedModules.includes(mod.id);
+                  const isExpanded = expandedModules[idx] ?? isCurrent;
+
+                  return (
+                    <div
+                      key={mod.id}
+                      className={`rounded-2xl border transition-all overflow-hidden ${
+                        isCurrent
+                          ? "border-[#7F3D59] bg-[#FDF8F9]"
+                          : "border-gray-200 bg-white hover:border-gray-300"
                       }`}
                     >
-                      {isDone ? <Check className="w-3 h-3 text-white" /> : idx + 1}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-1 mb-1">
-                        <span className="text-xs text-gray-400 font-mono">Module {idx + 1}</span>
-                        <span className="text-[11px] text-[#D4AF37] font-medium">{m.duration}</span>
-                      </div>
-                      <p className={`text-sm font-medium leading-snug line-clamp-2 ${isActive ? "text-white font-bold" : "text-gray-300"}`}>
-                        {m.title}
-                      </p>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Offline Auto-Save Status Badge */}
-            <div className="mt-auto p-4 border-t border-[#3E1A29] bg-[#1D0B14]/60 text-[11px] text-gray-400 flex items-center justify-between">
-              <span className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                <span>Auto-Save Active (SQLite &amp; Cloud)</span>
-              </span>
-              <span className="font-mono text-gray-500">v2.0</span>
-            </div>
-          </aside>
-
-          {/* Main Module Content Viewport */}
-          <main className="flex-1 bg-[#1D0B14] overflow-y-auto p-6 lg:p-10 space-y-8">
-            {currentModule ? (
-              <div className="max-w-4xl mx-auto space-y-8">
-                {/* Module Header */}
-                <div className="space-y-2 border-b border-[#3E1A29] pb-6">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold uppercase tracking-wider text-[#D4AF37]">
-                      Module {activeModuleIndex + 1} of {modules.length}
-                    </span>
-                    <span className="text-gray-600">•</span>
-                    <span className="text-xs text-gray-400 font-medium">Estimated Duration: {currentModule.duration}</span>
-                  </div>
-                  <h2 className="text-2xl sm:text-3xl font-serif font-bold text-white">
-                    {currentModule.title}
-                  </h2>
-                  <p className="text-sm text-gray-300 leading-relaxed">
-                    {currentModule.summary}
-                  </p>
-                </div>
-
-                {/* Media Presentation: Video vs Low-Bandwidth Audio Mode */}
-                <div className="bg-[#16070E] rounded-3xl border border-[#3E1A29] overflow-hidden shadow-2xl">
-                  {isLowBandwidth ? (
-                    /* Low-Bandwidth Audio + Transcript Mode */
-                    <div className="p-8 space-y-6">
-                      <div className="flex items-center justify-between pb-4 border-b border-[#3E1A29]">
-                        <div className="flex items-center gap-3">
-                          <span className="w-10 h-10 rounded-full bg-amber-500/20 text-amber-300 flex items-center justify-center">
-                            <Mic className="w-5 h-5 text-amber-300" />
-                          </span>
+                      <button
+                        onClick={() => {
+                          setActiveModuleIndex(idx);
+                          setExpandedModules({ ...expandedModules, [idx]: !isExpanded });
+                        }}
+                        className="w-full p-3.5 text-left flex items-start justify-between gap-2"
+                      >
+                        <div className="flex items-start gap-2.5">
+                          <div
+                            className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 mt-0.5 text-[10px] font-bold ${
+                              isDone
+                                ? "bg-emerald-600 text-white"
+                                : isCurrent
+                                ? "bg-[#7F3D59] text-white"
+                                : "bg-gray-100 text-gray-500"
+                            }`}
+                          >
+                            {isDone ? <Check className="w-3 h-3" /> : idx + 1}
+                          </div>
                           <div>
-                            <h4 className="text-sm font-bold text-white">Low-Bandwidth Audio Lecture</h4>
-                            <p className="text-xs text-amber-300/80">Using compressed low-bitrate audio (Saves ~90% mobile data)</p>
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block">
+                              Module {idx + 1} • {mod.duration}
+                            </span>
+                            <h4 className="text-xs font-serif font-bold text-gray-900 leading-snug">
+                              {mod.title.replace(/^Module \d+:\s*/, '')}
+                            </h4>
                           </div>
                         </div>
-                        <span className="text-xs font-mono text-gray-400">Adaptive Pan-African Streaming</span>
-                      </div>
 
-                      {/* Simulated Audio Player */}
-                      <div className="bg-[#1D0B14] p-4 rounded-2xl border border-gray-800 flex items-center gap-4">
-                        <button className="w-10 h-10 rounded-full bg-[#D4AF37] text-[#1D0B14] flex items-center justify-center font-bold text-sm shadow-md">
-                          ▶
-                        </button>
-                        <div className="flex-1 space-y-1">
-                          <div className="flex justify-between text-[11px] text-gray-400 font-mono">
-                            <span>04:12</span>
-                            <span>{currentModule.duration}</span>
-                          </div>
-                          <div className="w-full bg-gray-700 rounded-full h-1.5 overflow-hidden">
-                            <div className="bg-[#D4AF37] h-full w-1/4"></div>
-                          </div>
-                        </div>
-                        <span className="text-xs font-mono text-gray-400">1x</span>
-                      </div>
-
-                      {/* Executive Bullet Summary */}
-                      <div className="space-y-3">
-                        <h5 className="text-xs font-bold uppercase tracking-wider text-gray-400">
-                          Executive Lecture Notes:
-                        </h5>
-                        <ul className="space-y-2 text-xs text-gray-300 list-disc list-inside">
-                          {currentModule.topics?.map((topic, tidx) => (
-                            <li key={tidx} className="leading-relaxed">{topic}</li>
-                          )) || (
-                            <li>Detailed review of core principles and financial covenants for growth.</li>
+                        <span className="text-gray-400 pt-1">
+                          {isExpanded ? (
+                            <ChevronDown className="w-3.5 h-3.5" />
+                          ) : (
+                            <ChevronRight className="w-3.5 h-3.5" />
                           )}
-                        </ul>
-                      </div>
-                    </div>
-                  ) : (
-                    /* Full Video Player Mode */
-                    <div className="relative aspect-video bg-black flex items-center justify-center group">
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/30 z-10 pointer-events-none"></div>
-                      <img
-                        src={course.thumbnailUrl || "/images/courses/investment-readiness.png"}
-                        alt={currentModule.title}
-                        className="w-full h-full object-cover opacity-60 group-hover:opacity-75 transition-opacity"
-                      />
-                      <div className="absolute z-20 text-center space-y-3 p-4">
-                        <button
-                          type="button"
-                          className="w-16 h-16 rounded-full bg-[#7F3D59] hover:bg-[#5E2C41] text-white flex items-center justify-center text-2xl mx-auto shadow-2xl hover:scale-105 transition-transform border-2 border-[#D4AF37]"
-                          aria-label="Play video lesson"
-                        >
-                          ▶
-                        </button>
-                        <div>
-                          <p className="text-sm font-serif font-bold text-white">{currentModule.title}</p>
-                          <p className="text-xs text-[#D4AF37]">{currentModule.duration} • 1080p Full HD Video Lecture</p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Pan-African Case Study Card */}
-                {currentModule.caseStudy && (
-                  <div className="bg-gradient-to-br from-[#16070E] to-[#250D18] rounded-3xl p-6 sm:p-8 border border-[#7F3D59]/40 space-y-4">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold uppercase tracking-wider text-[#D4AF37] flex items-center gap-1.5">
-                        <Globe className="w-3.5 h-3.5 text-[#D4AF37]" />
-                        <span>Pan-African Case Study</span>
-                      </span>
-                      {currentModule.caseStudy.country && (
-                        <span className="text-xs font-mono text-gray-400 bg-black/40 px-2.5 py-0.5 rounded-full border border-white/10">
-                          {currentModule.caseStudy.country}
                         </span>
+                      </button>
+
+                      {/* Expandable Module Sub-steps */}
+                      {isExpanded && (
+                        <div className="px-4 pb-3 pt-1 space-y-1.5 border-t border-gray-100 text-xs bg-white/60">
+                          <div className="flex items-center gap-2 text-gray-700 py-1 font-medium">
+                            <Sparkles className="w-3.5 h-3.5 text-[#7F3D59]" />
+                            <span>Learning Objectives</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-gray-700 py-1 font-medium">
+                            <PlayCircle className="w-3.5 h-3.5 text-[#7F3D59]" />
+                            <span>Interactive Video &amp; Simulation</span>
+                          </div>
+                          {mod.templateName && (
+                            <div className="flex items-center gap-2 text-gray-700 py-1 font-medium">
+                              <Download className="w-3.5 h-3.5 text-[#D4AF37]" />
+                              <span className="truncate">{mod.templateName}</span>
+                            </div>
+                          )}
+                          <div className="flex items-center gap-2 text-gray-700 py-1 font-medium">
+                            <HelpCircle className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>Graded Module Quiz</span>
+                          </div>
+                        </div>
                       )}
                     </div>
-                    <h3 className="text-lg sm:text-xl font-serif font-bold text-white">
-                      {currentModule.caseStudy.title}
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </aside>
+
+        {/* RIGHT MAIN LEARNING STAGE */}
+        <main className="flex-1 space-y-6 min-w-0">
+          
+          {/* VIEW 1: MODULE LEARNING STAGE */}
+          {activeView === 'MODULE' && currentModule && (
+            <div className="space-y-6">
+              
+              {/* Module Header & Learning Objectives Banner */}
+              <div className="bg-white rounded-3xl p-6 sm:p-8 border border-[#EAD7E0] shadow-sm space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 pb-3">
+                  <span className="px-3 py-1 bg-[#7F3D59]/10 text-[#7F3D59] rounded-full text-xs font-bold uppercase tracking-wider">
+                    Module {activeModuleIndex + 1} of {modules.length}
+                  </span>
+                  <span className="text-xs text-gray-500 font-medium">
+                    Estimated Time: <strong>{currentModule.duration}</strong>
+                  </span>
+                </div>
+
+                <h2 className="text-2xl sm:text-3xl font-serif font-extrabold text-[#1D0B14]">
+                  {currentModule.title}
+                </h2>
+
+                <p className="text-sm text-gray-600 leading-relaxed font-light">
+                  {currentModule.summary}
+                </p>
+
+                {/* Specific Learning Objectives Callout */}
+                {currentModule.keyTakeaways && currentModule.keyTakeaways.length > 0 && (
+                  <div className="p-5 rounded-2xl bg-[#FDF8F9] border border-[#EAD7E0] space-y-2">
+                    <h3 className="text-xs font-serif font-bold uppercase tracking-wider text-[#7F3D59] flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-[#D4AF37]" />
+                      <span>Key Learning Objectives &amp; Executive Competencies</span>
                     </h3>
-                    {currentModule.caseStudy.founder && (
-                      <p className="text-xs text-gray-400 font-medium">
-                        Spotlight Founder: <span className="text-gray-200">{currentModule.caseStudy.founder}</span>
+                    <ul className="space-y-1.5 text-xs text-gray-700">
+                      {currentModule.keyTakeaways.map((takeaway, tIdx) => (
+                        <li key={tIdx} className="flex items-start gap-2">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 mt-0.5 shrink-0" />
+                          <span>{takeaway}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+
+              {/* Lesson Delivery Stage (Interactive Simulation vs Native Video) */}
+              <div className="bg-white rounded-3xl p-6 sm:p-8 border border-[#EAD7E0] shadow-sm space-y-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4">
+                  <div className="flex items-center gap-2">
+                    <span className="p-2 bg-[#7F3D59]/10 text-[#7F3D59] rounded-xl">
+                      <PlayCircle className="w-5 h-5" />
+                    </span>
+                    <div>
+                      <h3 className="text-base font-serif font-bold text-gray-900">
+                        Lesson Delivery Mode
+                      </h3>
+                      <p className="text-xs text-gray-500">
+                        Choose between structured video analysis or interactive simulation workshop.
                       </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1 bg-[#FDF8F9] p-1 rounded-xl border border-[#EAD7E0] text-xs font-bold self-start sm:self-auto">
+                    <button
+                      onClick={() => setActiveLessonMode('NATIVE')}
+                      className={`px-3 py-1.5 rounded-lg transition-colors ${
+                        activeLessonMode === 'NATIVE'
+                          ? 'bg-[#7F3D59] text-white shadow-xs'
+                          : 'text-gray-600 hover:text-gray-900'
+                      }`}
+                    >
+                      Video &amp; Case Study
+                    </button>
+                    <button
+                      onClick={() => setActiveLessonMode('SIMULATION')}
+                      className={`px-3 py-1.5 rounded-lg transition-colors ${
+                        activeLessonMode === 'SIMULATION'
+                          ? 'bg-[#7F3D59] text-white shadow-xs'
+                          : 'text-gray-600 hover:text-gray-900'
+                      }`}
+                    >
+                      Interactive Workshop
+                    </button>
+                  </div>
+                </div>
+
+                {/* MODE A: Native Video & Case Study */}
+                {activeLessonMode === 'NATIVE' && (
+                  <div className="space-y-6">
+                    {isLowBandwidth ? (
+                      /* Low-Bandwidth Data Saver Card */
+                      <div className="p-6 rounded-2xl bg-amber-50/60 border border-amber-200 space-y-3">
+                        <div className="flex items-center gap-2 text-amber-900 font-serif font-bold text-sm">
+                          <Wifi className="w-4 h-4 text-amber-700" />
+                          <span>Data Saver Audio &amp; Executive Summary Active</span>
+                        </div>
+                        <p className="text-xs text-gray-700 leading-relaxed">
+                          Video streaming has been paused to conserve bandwidth. You are accessing optimized executive audio notes and offline-persisted case summaries.
+                        </p>
+                        <div className="pt-2">
+                          <audio controls className="w-full h-10 rounded-lg">
+                            <source src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" type="audio/mpeg" />
+                            Your browser does not support audio playback.
+                          </audio>
+                        </div>
+                      </div>
+                    ) : (
+                      /* Video Lesson Player */
+                      <div className="aspect-video bg-black rounded-2xl overflow-hidden shadow-md relative">
+                        <video
+                          controls
+                          className="w-full h-full object-cover"
+                          poster="/images/investment-readiness.png"
+                        >
+                          <source src={currentModule.videoUrl || "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"} type="video/mp4" />
+                          Your browser does not support HTML5 video playback.
+                        </video>
+                      </div>
                     )}
-                    <p className="text-xs sm:text-sm text-gray-300 leading-relaxed font-light">
-                      {currentModule.caseStudy.summary}
-                    </p>
-                    {currentModule.caseStudy.keyTakeaway && (
-                      <div className="p-4 bg-black/30 rounded-2xl border border-[#D4AF37]/20 text-xs text-[#D4AF37] space-y-1">
-                        <span className="font-bold uppercase tracking-wider text-[10px]">Strategic Takeaway:</span>
-                        <p className="text-gray-200">{currentModule.caseStudy.keyTakeaway}</p>
+
+                    {/* Pan-African Founder Case Study */}
+                    {currentModule.caseStudy && (
+                      <div className="p-6 rounded-2xl bg-[#FDF8F9] border border-[#EAD7E0] space-y-2">
+                        <div className="flex items-center gap-2 text-[#7F3D59] font-serif font-bold text-xs uppercase tracking-wider">
+                          <ShieldCheck className="w-4 h-4 text-[#D4AF37]" />
+                          <span>Pan-African Founder Case Study</span>
+                        </div>
+                        <p className="text-xs sm:text-sm text-gray-800 leading-relaxed font-light">
+                          {currentModule.caseStudy}
+                        </p>
                       </div>
                     )}
                   </div>
                 )}
 
-                {/* Downloadable Practical Template Generator */}
-                {currentModule.practicalTemplate && (
-                  <div className="bg-[#16070E] rounded-3xl p-6 border border-[#3E1A29] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800 text-[10px] font-bold uppercase tracking-wider">
-                          Ready-to-Use Asset
-                        </span>
-                        <span className="text-xs text-gray-400 font-mono">{currentModule.practicalTemplate.format}</span>
-                      </div>
-                      <h4 className="text-base font-bold text-white font-serif">
-                        {currentModule.practicalTemplate.title}
-                      </h4>
-                      <p className="text-xs text-gray-400">
-                        Synthesized framework template with formulas, covenants, and checklists.
-                      </p>
+                {/* MODE B: Interactive Workshop Simulation */}
+                {activeLessonMode === 'SIMULATION' && (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between text-xs text-gray-500">
+                      <span>Interactive Digital Simulation Workshop (Auto-saves progress)</span>
+                      <button
+                        onClick={() => setIsTheaterMode(!isTheaterMode)}
+                        className="text-[#7F3D59] hover:underline font-bold"
+                      >
+                        {isTheaterMode ? "Standard View" : "Theater Mode"}
+                      </button>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() => handleDownloadTemplate(currentModule.practicalTemplate)}
-                      className="px-5 py-3 bg-[#7F3D59] hover:bg-[#5E2C41] text-white rounded-xl text-xs font-bold transition-all shadow-md shrink-0 flex items-center gap-2"
+                    <div
+                      className={`w-full rounded-2xl overflow-hidden border border-gray-300 shadow-md bg-white transition-all ${
+                        isTheaterMode ? "h-[750px]" : "h-[500px]"
+                      }`}
                     >
-                      <Download className="w-4 h-4 text-white" />
-                      <span>Download Practical Template</span>
+                      <iframe
+                        src={course?.scormPath || "/course/scormdriver/indexAPI.html"}
+                        title="Interactive Simulation Workshop"
+                        className="w-full h-full border-0"
+                        allowFullScreen
+                      ></iframe>
+                    </div>
+                  </div>
+                )}
+
+                {/* Practical Business Toolkit Download */}
+                {currentModule.templateName && (
+                  <div className="p-5 rounded-2xl border border-[#D4AF37]/50 bg-amber-50/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="space-y-1">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-[#7F3D59]">
+                        Practical Business Toolkit
+                      </span>
+                      <h4 className="text-sm font-serif font-bold text-gray-900">
+                        {currentModule.templateName}
+                      </h4>
+                      <p className="text-xs text-gray-600">
+                        Institutional template formatted for investor due diligence and African commercial banking.
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => handleDownloadTemplate(currentModule.templateName!)}
+                      className="px-5 py-2.5 bg-[#7F3D59] hover:bg-[#5E2C41] text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-1.5 shrink-0 self-start sm:self-auto"
+                    >
+                      <Download className="w-3.5 h-3.5 text-[#D4AF37]" />
+                      <span>Download Toolkit</span>
                     </button>
                   </div>
                 )}
+              </div>
 
-                {/* Module Knowledge Quick-Check */}
-                {currentModule.quiz?.questions && currentModule.quiz.questions.length > 0 && (
-                  <div className="bg-[#16070E] rounded-3xl p-6 sm:p-8 border border-[#3E1A29] space-y-6">
-                    <div className="flex items-center justify-between pb-3 border-b border-[#3E1A29]">
-                      <h4 className="text-base font-serif font-bold text-white flex items-center gap-2">
-                        <Zap className="w-4 h-4 text-[#D4AF37]" />
-                        <span>Module Competency Quick-Check</span>
-                      </h4>
-                      <span className="text-xs text-gray-400 font-mono">
-                        {currentModule.quiz.questions.length} Scenario Questions
+              {/* EMBEDDED GRADED MODULE QUIZ (LIVING INSIDE THIS COURSE) */}
+              {currentModuleQuiz && (
+                <div className="bg-white rounded-3xl p-6 sm:p-8 border border-[#EAD7E0] shadow-sm space-y-6">
+                  <div className="flex items-center justify-between border-b border-gray-100 pb-4">
+                    <div className="flex items-center gap-2">
+                      <span className="p-2 bg-emerald-50 text-emerald-700 rounded-xl">
+                        <HelpCircle className="w-5 h-5 text-emerald-700" />
                       </span>
+                      <div>
+                        <h3 className="text-base font-serif font-bold text-gray-900">
+                          Module Graded Assessment: {currentModuleQuiz.name}
+                        </h3>
+                        <p className="text-xs text-gray-500">
+                          Scenario evaluation testing practical decision-making. Passing threshold is 80%.
+                        </p>
+                      </div>
                     </div>
 
-                    <div className="space-y-6">
-                      {currentModule.quiz.questions.map((q, qidx) => {
-                        const selected = quickCheckAnswers[q.id];
-                        const submitted = quickCheckSubmitted[q.id];
-                        const isCorrect = selected === q.correctAnswer;
+                    {currentQuizBestAttempt && (
+                      <span
+                        className={`px-3 py-1 rounded-full text-xs font-bold ${
+                          currentQuizBestAttempt.passed
+                            ? "bg-emerald-100 text-emerald-800"
+                            : "bg-red-100 text-red-800"
+                        }`}
+                      >
+                        {currentQuizBestAttempt.passed ? "Passed (80%+)" : "Needs Retake"}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Quiz Score Banner if just submitted */}
+                  {quizSubmitted && quizScore && (
+                    <div
+                      className={`p-5 rounded-2xl border text-xs font-medium space-y-1 ${
+                        quizScore.passed
+                          ? "bg-emerald-50 text-emerald-900 border-emerald-200"
+                          : "bg-red-50 text-red-900 border-red-200"
+                      }`}
+                    >
+                      <h4 className="font-serif font-bold text-sm">
+                        {quizScore.passed ? "Assessment Passed!" : "Assessment Needs Review"}
+                      </h4>
+                      <p>
+                        You scored <strong>{quizScore.score}</strong> out of{" "}
+                        <strong>{quizScore.maxScore}</strong> (
+                        {Math.round((quizScore.score / quizScore.maxScore) * 100)}%).
+                        {quizScore.passed
+                          ? " Your executive score has been recorded in your course transcript."
+                          : " Review the module materials and retake the assessment to earn your passing grade."}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Quiz Questions Form */}
+                  <div className="space-y-6">
+                    {(currentModuleQuiz.questions || []).map((q: any, qIdx: number) => {
+                      return (
+                        <div key={q.id || qIdx} className="p-5 rounded-2xl bg-[#FDF8F9] border border-[#EAD7E0] space-y-3">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-[#7F3D59]">
+                            Question {qIdx + 1}
+                          </span>
+                          <div
+                            className="text-xs sm:text-sm font-semibold text-gray-900 leading-snug"
+                            dangerouslySetInnerHTML={{ __html: q.questiontext || q.name }}
+                          ></div>
+
+                          <div className="space-y-2 pt-2">
+                            {(q.answers || []).map((ans: any, aIdx: number) => {
+                              const isSelected = quizAnswers[qIdx] === aIdx;
+
+                              return (
+                                <button
+                                  key={ans.id || aIdx}
+                                  type="button"
+                                  onClick={() => setQuizAnswers({ ...quizAnswers, [qIdx]: aIdx })}
+                                  className={`w-full p-3 rounded-xl text-left text-xs transition-all flex items-start gap-2.5 ${
+                                    isSelected
+                                      ? "bg-[#7F3D59] text-white font-semibold shadow-xs"
+                                      : "bg-white text-gray-700 hover:bg-gray-100 border border-gray-200"
+                                  }`}
+                                >
+                                  <span
+                                    className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 text-[10px] font-bold ${
+                                      isSelected
+                                        ? "bg-white text-[#7F3D59]"
+                                        : "bg-gray-100 text-gray-600"
+                                    }`}
+                                  >
+                                    {String.fromCharCode(65 + aIdx)}
+                                  </span>
+                                  <span className="pt-0.5">{ans.text}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    <div className="pt-2 flex items-center justify-between">
+                      <span className="text-xs text-gray-500">
+                        {Object.keys(quizAnswers).length} of {(currentModuleQuiz.questions || []).length} answered
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleSubmitQuiz(currentModuleQuiz)}
+                        disabled={isSubmittingQuiz || Object.keys(quizAnswers).length < (currentModuleQuiz.questions || []).length}
+                        className="px-6 py-2.5 bg-[#7F3D59] hover:bg-[#5E2C41] text-white rounded-xl text-xs font-bold transition-all shadow-sm disabled:opacity-50"
+                      >
+                        {isSubmittingQuiz ? "Grading..." : "Submit Module Assessment"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Step Navigation Controls */}
+              <div className="flex items-center justify-between pt-4">
+                <button
+                  type="button"
+                  disabled={activeModuleIndex === 0}
+                  onClick={() => setActiveModuleIndex(activeModuleIndex - 1)}
+                  className="px-5 py-2.5 bg-white border border-gray-300 text-gray-700 rounded-xl text-xs font-bold hover:bg-gray-50 transition-colors disabled:opacity-40"
+                >
+                  ← Previous Module
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleCompleteCurrentModule}
+                  className="px-6 py-2.5 bg-[#7F3D59] hover:bg-[#5E2C41] text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-2"
+                >
+                  <span>
+                    {activeModuleIndex < modules.length - 1
+                      ? "Complete Module & Next →"
+                      : "Finish Masterclass Curriculum"}
+                  </span>
+                </button>
+              </div>
+
+            </div>
+          )}
+
+          {/* VIEW 2: COURSERA-STYLE GRADES & ASSESSMENTS VIEW */}
+          {activeView === 'GRADES' && (
+            <div className="bg-white rounded-3xl p-6 sm:p-8 border border-[#EAD7E0] shadow-sm space-y-6">
+              <div className="border-b border-gray-100 pb-4">
+                <h2 className="text-2xl font-serif font-bold text-[#1D0B14]">
+                  Grades &amp; Course Assessments
+                </h2>
+                <p className="text-xs text-gray-500 mt-1">
+                  Track your evaluation results across all embedded scenario quizzes for this masterclass. Passing mark is 80%.
+                </p>
+              </div>
+
+              {courseQuizzes.length === 0 ? (
+                <div className="text-center py-8 text-xs text-gray-500">
+                  No graded assessments configured for this course yet.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200 text-xs">
+                    <thead>
+                      <tr className="bg-[#FDF8F9]">
+                        <th className="px-4 py-3 text-left font-bold text-gray-700 uppercase tracking-wider">
+                          Assessment Title
+                        </th>
+                        <th className="px-4 py-3 text-left font-bold text-gray-700 uppercase tracking-wider">
+                          Passing Score
+                        </th>
+                        <th className="px-4 py-3 text-left font-bold text-gray-700 uppercase tracking-wider">
+                          Highest Grade
+                        </th>
+                        <th className="px-4 py-3 text-left font-bold text-gray-700 uppercase tracking-wider">
+                          Status
+                        </th>
+                        <th className="px-4 py-3 text-right font-bold text-gray-700 uppercase tracking-wider">
+                          Action
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 bg-white">
+                      {courseQuizzes.map((quiz, qIdx) => {
+                        const attempts = quizAttempts.filter(a => a.quizId === quiz.id);
+                        const passedAttempt = attempts.find(a => a.passed);
+                        const bestAttempt = passedAttempt || attempts[0];
+                        const bestPct = bestAttempt ? Math.round((bestAttempt.score / bestAttempt.maxScore) * 100) : null;
 
                         return (
-                          <div key={q.id || qidx} className="space-y-3 p-4 rounded-2xl bg-[#1D0B14] border border-[#3E1A29]">
-                            <p className="text-xs sm:text-sm font-semibold text-white">
-                              {qidx + 1}. {q.question}
-                            </p>
-
-                            <div className="space-y-2">
-                              {q.options.map((opt, optIdx) => {
-                                const isSelected = selected === optIdx;
-                                let btnClasses = "w-full text-left p-3 rounded-xl text-xs transition-colors border ";
-                                if (submitted) {
-                                  if (optIdx === q.correctAnswer) {
-                                    btnClasses += "bg-emerald-950/80 border-emerald-500 text-emerald-200 font-bold";
-                                  } else if (isSelected && !isCorrect) {
-                                    btnClasses += "bg-red-950/80 border-red-500 text-red-200";
-                                  } else {
-                                    btnClasses += "bg-black/30 border-gray-800 text-gray-400";
-                                  }
-                                } else if (isSelected) {
-                                  btnClasses += "bg-[#7F3D59]/40 border-[#D4AF37] text-white font-bold";
-                                } else {
-                                  btnClasses += "bg-black/30 border-gray-800 text-gray-300 hover:border-gray-700";
-                                }
-
-                                return (
-                                  <button
-                                    key={optIdx}
-                                    type="button"
-                                    disabled={submitted}
-                                    onClick={() => handleSelectOption(q.id, optIdx)}
-                                    className={btnClasses}
-                                  >
-                                    <span className="font-mono text-gray-500 mr-2">
-                                      {String.fromCharCode(65 + optIdx)}.
-                                    </span>
-                                    {opt}
-                                  </button>
-                                );
-                              })}
-                            </div>
-
-                            {!submitted && selected !== undefined && (
+                          <tr key={quiz.id} className="hover:bg-gray-50">
+                            <td className="px-4 py-4">
+                              <div className="font-serif font-bold text-gray-900">{quiz.name}</div>
+                              <div className="text-[11px] text-gray-500">{quiz.intro}</div>
+                            </td>
+                            <td className="px-4 py-4 font-semibold text-gray-600">80%</td>
+                            <td className="px-4 py-4 font-bold font-mono">
+                              {bestPct !== null ? `${bestPct}%` : "—"}
+                            </td>
+                            <td className="px-4 py-4">
+                              {passedAttempt ? (
+                                <span className="px-2.5 py-0.5 bg-emerald-100 text-emerald-800 rounded-full font-bold text-[10px]">
+                                  Passed
+                                </span>
+                              ) : attempts.length > 0 ? (
+                                <span className="px-2.5 py-0.5 bg-red-100 text-red-800 rounded-full font-bold text-[10px]">
+                                  Needs Retake
+                                </span>
+                              ) : (
+                                <span className="px-2.5 py-0.5 bg-gray-100 text-gray-600 rounded-full font-bold text-[10px]">
+                                  Not Started
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-4 py-4 text-right">
                               <button
-                                type="button"
-                                onClick={() => handleCheckQuestion(q.id)}
-                                className="px-4 py-2 bg-[#D4AF37] text-[#1D0B14] font-bold text-xs rounded-lg shadow-sm"
+                                onClick={() => {
+                                  setActiveView('MODULE');
+                                  setActiveModuleIndex(qIdx % modules.length);
+                                }}
+                                className="px-3.5 py-1.5 bg-[#7F3D59] hover:bg-[#5E2C41] text-white rounded-xl font-bold transition-all"
                               >
-                                Check Answer
+                                {passedAttempt ? "Retake Assessment" : "Start Assessment"}
                               </button>
-                            )}
-
-                            {submitted && (
-                              <div
-                                className={`p-3 rounded-xl text-xs ${
-                                  isCorrect ? "bg-emerald-950/60 border border-emerald-800 text-emerald-300" : "bg-red-950/60 border border-red-800 text-red-300"
-                                }`}
-                              >
-                                <div className="font-bold mb-1 flex items-center gap-1.5">
-                                  {isCorrect ? (
-                                    <>
-                                      <Check className="w-3.5 h-3.5 text-emerald-400" />
-                                      <span>Correct!</span>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <X className="w-3.5 h-3.5 text-red-400" />
-                                      <span>Review Rationale:</span>
-                                    </>
-                                  )}
-                                </div>
-                                <p className="text-gray-300">{q.explanation}</p>
-                              </div>
-                            )}
-                          </div>
+                            </td>
+                          </tr>
                         );
                       })}
-                    </div>
-                  </div>
-                )}
-
-                {/* Module Progression Footer */}
-                <div className="pt-6 border-t border-[#3E1A29] flex flex-col sm:flex-row items-center justify-between gap-4">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (activeModuleIndex > 0) setActiveModuleIndex(activeModuleIndex - 1);
-                    }}
-                    disabled={activeModuleIndex === 0}
-                    className="w-full sm:w-auto px-5 py-3 rounded-xl border border-gray-700 hover:border-gray-500 text-xs text-gray-300 disabled:opacity-30 disabled:pointer-events-none transition-colors"
-                  >
-                    ← Previous Module
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleCompleteCurrentModule}
-                    className="w-full sm:w-auto px-8 py-3.5 bg-[#7F3D59] hover:bg-[#5E2C41] text-white rounded-xl text-xs font-bold transition-all shadow-lg flex items-center justify-center gap-2"
-                  >
-                    <span>
-                      {completedModules.includes(currentModule.id)
-                        ? "Marked Done • Advance to Next →"
-                        : "Mark Module Complete & Continue →"}
-                    </span>
-                  </button>
+                    </tbody>
+                  </table>
                 </div>
-              </div>
-            ) : null}
-          </main>
-        </div>
-      ) : (
-        /* SCORM 1.2 / 2004 IFRAME PLAYER */
-        <div className="flex-1 relative flex">
-          <iframe
-            src={course.packagePath || "/course/scormdriver/indexAPI.html"}
-            className="flex-1 w-full h-full border-0 bg-white"
-            title={course.title}
-          />
-        </div>
-      )}
-
-      {/* Reviewer Commenting Drawer */}
-      <AnimatePresence>
-        {isSidebarOpen && (
-          <motion.div
-            initial={{ x: 350, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            exit={{ x: 350, opacity: 0 }}
-            className="fixed top-16 right-0 bottom-0 w-80 sm:w-96 bg-[#16070E] border-l border-[#3E1A29] shadow-2xl z-30 flex flex-col"
-          >
-            <div className="p-4 border-b border-[#3E1A29] flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-serif font-bold text-white">Reviewer Annotations</h3>
-                <p className="text-xs text-gray-400">Content Quality &amp; Pedagogical Feedback</p>
-              </div>
-              <button
-                onClick={() => setIsSidebarOpen(false)}
-                className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-white/10"
-                aria-label="Close reviewer drawer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="p-4 border-b border-[#3E1A29] space-y-3">
-              <textarea
-                value={commentText}
-                onChange={(e) => setCommentText(e.target.value)}
-                placeholder="Enter feedback or editorial recommendation on this module..."
-                className="w-full h-24 p-3 bg-[#1D0B14] border border-gray-700 rounded-xl text-xs text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-[#D4AF37]"
-              />
-              <button
-                type="button"
-                disabled={isSubmittingComment || !commentText.trim()}
-                onClick={async () => {
-                  if (!commentText.trim() || !session?.user?.id) return;
-                  setIsSubmittingComment(true);
-                  try {
-                    await addReviewComment(
-                      params.id as string,
-                      session.user.id as string,
-                      `Module-${activeModuleIndex + 1}`,
-                      modules[activeModuleIndex]?.title || "Course Review",
-                      "EDITORIAL",
-                      commentText
-                    );
-                    setCommentText("");
-                    refreshComments();
-                  } catch (e) {
-                    console.error("Error adding review comment:", e);
-                  } finally {
-                    setIsSubmittingComment(false);
-                  }
-                }}
-                className="w-full py-2 bg-[#7F3D59] hover:bg-[#5E2C41] text-white font-bold text-xs rounded-lg transition-colors disabled:opacity-50"
-              >
-                {isSubmittingComment ? "Saving..." : "Submit Reviewer Feedback"}
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
-              {comments.length === 0 ? (
-                <p className="text-xs text-gray-500 text-center py-6">
-                  No reviewer annotations recorded yet.
-                </p>
-              ) : (
-                comments.map((c) => (
-                  <div key={c.id} className="p-3 rounded-xl bg-[#1D0B14] border border-[#3E1A29] space-y-1.5 text-xs">
-                    <div className="flex items-center justify-between text-gray-400 text-[11px]">
-                      <span className="font-bold text-[#D4AF37]">{c.user?.name || "Reviewer"}</span>
-                      <span>{new Date(c.createdAt).toLocaleDateString()}</span>
-                    </div>
-                    <p className="text-gray-200">{c.comment}</p>
-                  </div>
-                ))
               )}
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          )}
+
+          {/* VIEW 3: OBJECTIVES & SYLLABUS */}
+          {activeView === 'SYLLABUS' && (
+            <div className="bg-white rounded-3xl p-6 sm:p-8 border border-[#EAD7E0] shadow-sm space-y-6">
+              <div className="border-b border-gray-100 pb-4">
+                <h2 className="text-2xl font-serif font-bold text-[#1D0B14]">
+                  Learning Objectives &amp; Executive Syllabus
+                </h2>
+                <p className="text-xs text-gray-500 mt-1">
+                  Full curriculum blueprint and institutional competencies certified upon completion.
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                {modules.map((m, idx) => (
+                  <div key={m.id} className="p-5 rounded-2xl bg-[#FDF8F9] border border-[#EAD7E0] space-y-2">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-[#7F3D59]">
+                      Module {idx + 1} • {m.duration}
+                    </span>
+                    <h3 className="text-base font-serif font-bold text-gray-900">{m.title}</h3>
+                    <p className="text-xs text-gray-600">{m.summary}</p>
+                    {m.keyTakeaways && (
+                      <ul className="pt-2 space-y-1 text-xs text-gray-700">
+                        {m.keyTakeaways.map((item, iIdx) => (
+                          <li key={iIdx} className="flex items-start gap-1.5">
+                            <span className="text-[#D4AF37] font-bold">•</span>
+                            <span>{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* VIEW 4: TOOLKITS & DOWNLOADS */}
+          {activeView === 'RESOURCES' && (
+            <div className="bg-white rounded-3xl p-6 sm:p-8 border border-[#EAD7E0] shadow-sm space-y-6">
+              <div className="border-b border-gray-100 pb-4">
+                <h2 className="text-2xl font-serif font-bold text-[#1D0B14]">
+                  Practical Business Toolkits &amp; Frameworks
+                </h2>
+                <p className="text-xs text-gray-500 mt-1">
+                  Download institutional financial models, pitch deck templates, and compliance matrices for your enterprise.
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                {modules
+                  .filter((m) => m.templateName)
+                  .map((m, idx) => (
+                    <div
+                      key={idx}
+                      className="p-4 rounded-2xl border border-[#EAD7E0] bg-[#FDF8F9] flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                    >
+                      <div>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                          From Module {idx + 1}
+                        </span>
+                        <h4 className="text-sm font-serif font-bold text-gray-900">{m.templateName}</h4>
+                      </div>
+                      <button
+                        onClick={() => handleDownloadTemplate(m.templateName!)}
+                        className="px-4 py-2 bg-[#7F3D59] hover:bg-[#5E2C41] text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 self-start sm:self-auto"
+                      >
+                        <Download className="w-3.5 h-3.5 text-[#D4AF37]" />
+                        <span>Download (.txt / .docx)</span>
+                      </button>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
+
+        </main>
+      </div>
     </div>
   );
 }

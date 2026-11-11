@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import CheckoutModal from "./CheckoutModal";
-import { Zap, Package, Award, Check, BookOpen, Download } from "lucide-react";
+import { Zap, Package, Award, Check, BookOpen, Download } from "@/components/Icons";
 
 interface ModuleData {
   id: string;

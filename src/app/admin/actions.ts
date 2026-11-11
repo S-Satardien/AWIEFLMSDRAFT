@@ -563,3 +563,316 @@ export async function getAdvancedQuizAnalytics() {
 
   return { analytics: finalAnalytics, questionMap };
 }
+
+// --- COURSE-SCOPED USER MANAGEMENT & 360° STUDENT PROFILE ACTIONS ---
+
+/**
+ * Fetches the comprehensive 360° dossier for an individual student,
+ * including LinkedIn-style profile data, all enrolled masterclasses,
+ * module progress, quiz scores, certificates, and payment receipts.
+ *
+ * @param {string} userId - Target student ID.
+ * @returns {Promise<any>} Full student dossier.
+ */
+export async function getStudentFullProfile(userId: string) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user || !['ADMIN', 'REVIEWER'].includes((session.user as any).role)) {
+    throw new Error("Unauthorized.");
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    include: {
+      enrollments: {
+        include: {
+          course: true,
+          scormState: true,
+          certificate: true,
+          surveyResponse: true,
+        },
+        orderBy: { lastAccess: "desc" }
+      },
+      quizAttempts: {
+        orderBy: { createdAt: "desc" }
+      },
+      transactions: {
+        include: { course: { select: { title: true } } },
+        orderBy: { createdAt: "desc" }
+      },
+      certificates: {
+        include: { course: { select: { title: true } } },
+        orderBy: { issuedAt: "desc" }
+      }
+    }
+  });
+
+  if (!user) return null;
+
+  // Compute clean enrollment summaries
+  const enrollments = user.enrollments.map((e) => {
+    let progress = e.progress || 0;
+    const stateMap: Record<string, string> = {};
+    e.scormState.forEach((s) => (stateMap[s.cmiKey] = s.cmiValue));
+
+    if (stateMap["cmi.progress_measure"]) {
+      progress = Math.max(progress, Math.round(parseFloat(stateMap["cmi.progress_measure"]) * 100));
+    } else if (
+      stateMap["cmi.completion_status"] === "completed" ||
+      stateMap["cmi.core.lesson_status"] === "completed" ||
+      stateMap["cmi.core.lesson_status"] === "passed"
+    ) {
+      progress = 100;
+    }
+
+    return {
+      enrollmentId: e.id,
+      courseId: e.courseId,
+      courseTitle: e.course.title,
+      category: e.course.category,
+      priceZar: e.course.priceZar,
+      status: e.status,
+      progress: Math.min(100, Math.round(progress)),
+      lastAccess: e.lastAccess.toISOString(),
+      completedAt: e.completedAt ? e.completedAt.toISOString() : null,
+      certificateNumber: e.certificate?.certificateNumber || null,
+      surveyCompleted: Boolean(e.surveyCompleted || e.surveyResponse)
+    };
+  });
+
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    country: user.country,
+    city: user.city,
+    headline: user.headline,
+    bio: user.bio,
+    organization: user.organization,
+    profession: user.profession,
+    businessStage: user.businessStage,
+    sector: user.sector,
+    awiefProgram: user.awiefProgram,
+    yearsInBusiness: user.yearsInBusiness,
+    website: user.website,
+    linkedinUrl: user.linkedinUrl,
+    twitterUrl: user.twitterUrl,
+    skills: user.skills,
+    education: user.education,
+    currentStreak: user.currentStreak,
+    createdAt: user.createdAt.toISOString(),
+    lastActiveDate: user.lastActiveDate ? user.lastActiveDate.toISOString() : null,
+    enrollments,
+    quizAttempts: user.quizAttempts.map((q) => ({
+      id: q.id,
+      quizId: q.quizId,
+      score: q.score,
+      maxScore: q.maxScore,
+      passed: q.passed,
+      createdAt: q.createdAt.toISOString()
+    })),
+    transactions: user.transactions.map((t) => ({
+      id: t.id,
+      reference: t.reference,
+      courseTitle: t.course?.title,
+      gateway: t.gateway,
+      currency: t.currency,
+      amountZar: t.amountZar,
+      createdAt: t.createdAt.toISOString()
+    })),
+    certificates: user.certificates.map((c) => ({
+      id: c.id,
+      certificateNumber: c.certificateNumber,
+      courseTitle: c.courseTitle,
+      issuedAt: c.issuedAt.toISOString()
+    }))
+  };
+}
+
+/**
+ * Enrolls a student directly into a specific course from the admin portal.
+ *
+ * @param {string} userId - Student ID.
+ * @param {string} courseId - Course ID.
+ * @returns {Promise<{ success: boolean; error?: string }>}
+ */
+export async function adminEnrollUserInCourse(userId: string, courseId: string) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user || (session.user as any).role !== "ADMIN") {
+    return { success: false, error: "Unauthorized." };
+  }
+
+  try {
+    await prisma.enrollment.upsert({
+      where: {
+        userId_courseId: { userId, courseId }
+      },
+      update: {
+        lastAccess: new Date()
+      },
+      create: {
+        userId,
+        courseId,
+        status: "IN_PROGRESS",
+        progress: 0
+      }
+    });
+
+    return { success: true };
+  } catch (e: any) {
+    return { success: false, error: e.message };
+  }
+}
+
+/**
+ * Updates a student's completion rate or marks a course complete from admin.
+ *
+ * @param {string} enrollmentId - Enrollment ID.
+ * @param {number} progress - Completion percentage (0 to 100).
+ * @returns {Promise<{ success: boolean; error?: string }>}
+ */
+export async function adminUpdateEnrollmentProgress(enrollmentId: string, progress: number) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user || (session.user as any).role !== "ADMIN") {
+    return { success: false, error: "Unauthorized." };
+  }
+
+  try {
+    const isComplete = progress >= 100;
+    await prisma.enrollment.update({
+      where: { id: enrollmentId },
+      data: {
+        progress,
+        status: isComplete ? "COMPLETED" : "IN_PROGRESS",
+        completedAt: isComplete ? new Date() : null,
+        lastAccess: new Date()
+      }
+    });
+
+    // Update scormState as well
+    await prisma.scormState.upsert({
+      where: {
+        enrollmentId_cmiKey: { enrollmentId, cmiKey: "cmi.progress_measure" }
+      },
+      update: { cmiValue: (progress / 100).toFixed(2) },
+      create: { enrollmentId, cmiKey: "cmi.progress_measure", cmiValue: (progress / 100).toFixed(2) }
+    });
+
+    if (isComplete) {
+      await prisma.scormState.upsert({
+        where: {
+          enrollmentId_cmiKey: { enrollmentId, cmiKey: "cmi.completion_status" }
+        },
+        update: { cmiValue: "completed" },
+        create: { enrollmentId, cmiKey: "cmi.completion_status", cmiValue: "completed" }
+      });
+    }
+
+    return { success: true };
+  } catch (e: any) {
+    return { success: false, error: e.message };
+  }
+}
+
+/**
+ * Unenrolls a student from a course.
+ *
+ * @param {string} enrollmentId - Enrollment ID.
+ * @returns {Promise<{ success: boolean; error?: string }>}
+ */
+export async function adminUnenrollUser(enrollmentId: string) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user || (session.user as any).role !== "ADMIN") {
+    return { success: false, error: "Unauthorized." };
+  }
+
+  try {
+    await prisma.enrollment.delete({ where: { id: enrollmentId } });
+    return { success: true };
+  } catch (e: any) {
+    return { success: false, error: e.message };
+  }
+}
+
+/**
+ * Fetches the course-scoped roster with filterable student telemetry.
+ *
+ * @param {string} courseId - Optional Course ID to scope by.
+ * @returns {Promise<any[]>} List of enrolled students for this course.
+ */
+export async function getCourseRoster(courseId?: string) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user || !['ADMIN', 'REVIEWER'].includes((session.user as any).role)) {
+    return [];
+  }
+
+  const whereClause: any = {};
+  if (courseId && courseId !== "ALL") {
+    whereClause.courseId = courseId;
+  }
+
+  const enrollments = await prisma.enrollment.findMany({
+    where: whereClause,
+    include: {
+      user: true,
+      course: { select: { id: true, title: true, category: true } },
+      scormState: true,
+      certificate: true,
+      surveyResponse: true,
+    },
+    orderBy: { lastAccess: "desc" }
+  });
+
+  const [allQuizzes, allAttempts, allTxs] = await Promise.all([
+    prisma.quiz.findMany(),
+    prisma.quizAttempt.findMany({ where: { passed: true } }),
+    prisma.transaction.findMany()
+  ]);
+
+  return enrollments.map((e) => {
+    let progress = e.progress || 0;
+    const stateMap: Record<string, string> = {};
+    e.scormState.forEach((s) => (stateMap[s.cmiKey] = s.cmiValue));
+
+    if (stateMap["cmi.progress_measure"]) {
+      progress = Math.max(progress, Math.round(parseFloat(stateMap["cmi.progress_measure"]) * 100));
+    } else if (
+      stateMap["cmi.completion_status"] === "completed" ||
+      stateMap["cmi.core.lesson_status"] === "completed"
+    ) {
+      progress = 100;
+    }
+
+    // Quizzes for this course
+    const courseQuizzes = allQuizzes.filter((q) => q.courseId === e.courseId);
+    const userPassed = allAttempts.filter(
+      (a) => a.userId === e.userId && courseQuizzes.some((cq) => cq.quizKey === a.quizId || cq.id.toString() === a.quizId)
+    );
+
+    // Latest transaction
+    const tx = allTxs.find((t) => t.userId === e.userId && t.courseId === e.courseId);
+
+    return {
+      enrollmentId: e.id,
+      userId: e.userId,
+      studentName: e.user.name || "Anonymous",
+      email: e.user.email,
+      country: e.user.country || "ZA",
+      city: e.user.city || "",
+      organization: e.user.organization || "Independent Enterprise",
+      profession: e.user.profession || "Founder",
+      businessStage: e.user.businessStage || "Growth Stage",
+      sector: e.user.sector || "Enterprise",
+      courseId: e.courseId,
+      courseTitle: e.course.title,
+      progress: Math.min(100, Math.round(progress)),
+      status: e.status,
+      lastAccess: e.lastAccess.toISOString(),
+      passedQuizzesCount: userPassed.length,
+      totalCourseQuizzes: courseQuizzes.length,
+      certificateNumber: e.certificate?.certificateNumber || null,
+      gateway: tx?.gateway || (e.progress > 0 ? "DIRECT" : "SCHOLARSHIP")
+    };
+  });
+}
+

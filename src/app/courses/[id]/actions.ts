@@ -3,6 +3,7 @@
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { revalidatePath } from "next/cache";
 
 export interface CheckoutPayload {
   courseId: string;
@@ -48,6 +49,12 @@ export async function enrollInCourse(courseId: string) {
       status: "IN_PROGRESS",
     },
   });
+
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/courses");
+  revalidatePath("/catalog");
+  revalidatePath(`/courses/${courseId}`);
+  revalidatePath(`/course/${courseId}`);
 
   return { success: true, redirectUrl: `/course/${courseId}` };
 }
@@ -117,6 +124,13 @@ export async function processCourseCheckout(payload: CheckoutPayload) {
         progress: 0,
       },
     });
+
+    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/courses");
+    revalidatePath("/catalog");
+    revalidatePath(`/courses/${payload.courseId}`);
+    revalidatePath(`/course/${payload.courseId}`);
+    revalidatePath("/admin");
 
     return { success: true, redirectUrl: `/course/${payload.courseId}` };
   } catch (error: any) {

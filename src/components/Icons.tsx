@@ -34,6 +34,7 @@ export {
   Zap,
   Package,
   Wifi,
+  Link,
   Link as LinkIcon,
   Mic,
   Gift,
@@ -47,4 +48,9 @@ export {
   ChevronRight,
   PlayCircle,
   ArrowRight,
+  RefreshCw,
+  Filter,
+  Eye,
+  Settings,
+  Folder,
 } from "lucide-react";

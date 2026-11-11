@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ShieldCheck } from "lucide-react";
+import { ShieldCheck } from "@/components/Icons";
 
 export default function Navbar() {
   const { data: session } = useSession();
@@ -64,7 +64,7 @@ export default function Navbar() {
                 href={(session.user as any)?.role === 'ADMIN' ? "/admin" : "/dashboard"}
                 className="px-4 py-2 bg-awief-plum hover:bg-awief-plum-dark text-white text-sm font-bold rounded-xl transition-colors shadow-sm"
               >
-                {(session.user as any)?.role === 'ADMIN' ? "Admin Portal" : "Dashboard"}
+                {(session.user as any)?.role === 'ADMIN' ? "Admin" : "Dashboard"}
               </Link>
               <button
                 onClick={() => signOut({ callbackUrl: "/" })}

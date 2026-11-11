@@ -31,6 +31,16 @@ model User {
   yearsInBusiness   String?  // <1 year, 1-3 years, 3-5 years, >5 years
   isAwiefAlumni     Boolean  @default(false)
   
+  // LinkedIn-Style Founder Profile Builder
+  headline          String?  // Professional headline e.g. "Founder & CEO at BioAfriq | Techstars '25"
+  bio               String?  // Executive Summary / About
+  city              String?  // City / Hub (e.g. Nairobi, Cape Town, Lagos)
+  website           String?  // Venture Website
+  linkedinUrl       String?  // LinkedIn URL
+  twitterUrl        String?  // Twitter/X URL
+  skills            String?  // Competencies / Skills
+  education         String?  // Degrees / Business Schools
+  
   // Legacy / Form Compatibility Fields
   isNitagMember     Boolean  @default(false)
   nitagCountry      String?
