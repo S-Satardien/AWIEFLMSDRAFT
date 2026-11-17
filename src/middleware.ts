@@ -3,18 +3,28 @@ import { NextResponse } from "next/server";
 
 export default withAuth(
   function middleware(req) {
-    // If an admin route is accessed, check if the user is an admin or reviewer
-    if (req.nextUrl.pathname.startsWith("/admin") && !["ADMIN", "REVIEWER"].includes(req.nextauth.token?.role as string)) {
+    const role = (req.nextauth.token?.role as string | undefined) || "";
+    if (
+      req.nextUrl.pathname.startsWith("/admin") &&
+      !["ADMIN", "REVIEWER"].includes(role)
+    ) {
       return NextResponse.rewrite(new URL("/dashboard", req.url));
     }
   },
   {
     callbacks: {
-      authorized: ({ token }) => !!token,
+      authorized: ({ token }) => Boolean(token && token.id),
     },
   }
 );
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/course/:path*", "/admin/:path*"],
+  matcher: [
+    "/dashboard/:path*",
+    "/course/:path*",
+    "/admin/:path*",
+    "/profile/:path*",
+    "/certificate/:path*",
+    "/quiz/:path*",
+  ],
 };

@@ -15,12 +15,16 @@ model User {
   password          String   // Hashed password
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
+  tokenVersion      Int      @default(0)
+  failedLoginAttempts Int    @default(0)
+  lockedUntil       DateTime?
+  consentAcceptedAt DateTime?
   
   // Gamification & Demographics
   lastActiveDate    DateTime?
   currentStreak     Int      @default(0)
   country           String?
-  showOnLeaderboard Boolean  @default(true)
+  showOnLeaderboard Boolean  @default(false)
   
   // Enterprise & Professional Demographics
   organization      String?  // Company / Enterprise Name
@@ -243,4 +247,15 @@ model CourseReview {
   course     Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
 
   @@unique([userId, courseId])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  actorEmail String?
+  action     String
+  targetType String?
+  targetId   String?
+  details    String?
+  createdAt  DateTime @default(now())
 }

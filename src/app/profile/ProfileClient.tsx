@@ -2,9 +2,16 @@
 
 import { useState, useMemo } from "react";
 import Link from "next/link";
+import { signOut } from "next-auth/react";
 import { motion, AnimatePresence } from "framer-motion";
 import { COUNTRIES } from "@/lib/countries";
-import { changePassword, updateProfile, FounderProfileUpdatePayload } from "./actions";
+import {
+  changePassword,
+  updateProfile,
+  exportMyPersonalData,
+  deleteMyAccount,
+  FounderProfileUpdatePayload,
+} from "./actions";
 import {
   Sparkles,
   Lock,
@@ -867,6 +874,76 @@ export default function ProfileClient({ user }: { user: any }) {
           </div>
         )}
       </AnimatePresence>
+
+      {/* 10. POPIA / GDPR PERSONAL DATA RIGHTS & ENCRYPTION CONTROLS */}
+      <div className="bg-white rounded-3xl p-6 sm:p-8 border border-[#EAD7E0] shadow-sm space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4">
+          <div className="space-y-1">
+            <div className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-emerald-700">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+              <span>AES-256-GCM Encrypted PII · POPIA / NDPA / GDPR Controls</span>
+            </div>
+            <h2 className="text-lg font-serif font-bold text-[#1D0B14]">
+              Privacy &amp; Personal Data Rights
+            </h2>
+            <p className="text-xs text-gray-500">
+              Download an encrypted-decrypted JSON archive of your account records or exercise your right to erasure.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                const exported = await exportMyPersonalData();
+                const blob = new Blob([JSON.stringify(exported, null, 2)], {
+                  type: "application/json;charset=utf-8",
+                });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `awief-personal-data-${new Date().toISOString().slice(0, 10)}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+              } catch (err: unknown) {
+                alert(err instanceof Error ? err.message : "Failed to export data.");
+              }
+            }}
+            className="px-4 py-2.5 bg-[#FDF8F9] hover:bg-white text-[#7F3D59] border border-[#EAD7E0] rounded-xl text-xs font-bold transition-colors shrink-0 self-start sm:self-auto"
+          >
+            Download My Personal Data (JSON)
+          </button>
+        </div>
+
+        <div className="p-4 rounded-2xl bg-red-50/50 border border-red-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <h3 className="text-xs font-bold text-red-900">Delete Account (Right to Erasure)</h3>
+            <p className="text-xs text-red-700/80">
+              Permanently deletes your profile, enrollments, quiz records, and reviews. Certificates are permanently revoked.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={async () => {
+              const typed = prompt(
+                `Type your email address (${profile.email}) to permanently erase your account:`
+              );
+              if (!typed) return;
+              const res = await deleteMyAccount(typed);
+              if (!res.success) {
+                alert(res.error || "Could not erase account.");
+                return;
+              }
+              await signOut({ callbackUrl: "/" });
+            }}
+            className="px-4 py-2 bg-white hover:bg-red-600 text-red-700 hover:text-white border border-red-300 rounded-xl text-xs font-bold transition-colors shrink-0 self-start sm:self-auto"
+          >
+            Delete My Account
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

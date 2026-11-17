@@ -1,31 +1,54 @@
 "use server";
 
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { gradeQuizOnServer, stripQuizAnswersForClient } from "@/lib/quizGrader";
 
-/**
- * Fetches course metadata by ID.
- *
- * @param {string} courseId - The course identifier.
- * @returns {Promise<any>} The course record.
- */
-export async function getCourseDetails(courseId: string) {
-  const course = await prisma.course.findUnique({
-    where: { id: courseId }
+async function requireAuthenticatedUser(): Promise<{ userId: string; role: string }> {
+  const session = await getServerSession(authOptions);
+  const userId = (session?.user as { id?: string } | undefined)?.id;
+  const role = (session?.user as { role?: string } | undefined)?.role || "STUDENT";
+  if (!userId) {
+    throw new Error("Unauthorized");
+  }
+  return { userId, role };
+}
+
+async function verifyEnrollmentOwnership(enrollmentId: string) {
+  const { userId, role } = await requireAuthenticatedUser();
+  const enrollment = await prisma.enrollment.findUnique({
+    where: { id: enrollmentId },
+    select: { id: true, userId: true, courseId: true },
   });
-  return course;
+  if (!enrollment) {
+    throw new Error("Enrollment not found.");
+  }
+  if (enrollment.userId !== userId && role !== "ADMIN") {
+    throw new Error("Forbidden: You do not own this enrollment.");
+  }
+  return enrollment;
 }
 
 /**
- * Retrieves all SCORM CMI state key-value pairs for an enrollment.
- *
- * @param {string} enrollmentId - The enrollment ID.
- * @returns {Promise<Record<string, string>>} Key-value map of SCORM states.
+ * Fetches course metadata by ID.
+ */
+export async function getCourseDetails(courseId: string) {
+  return await prisma.course.findUnique({
+    where: { id: courseId },
+  });
+}
+
+/**
+ * Retrieves all SCORM CMI state key-value pairs for a verified enrollment.
  */
 export async function getScormState(enrollmentId: string) {
+  await verifyEnrollmentOwnership(enrollmentId);
+
   const states = await prisma.scormState.findMany({
-    where: { enrollmentId }
+    where: { enrollmentId },
   });
-  
+
   const stateMap: Record<string, string> = {};
   for (const s of states) {
     stateMap[s.cmiKey] = s.cmiValue;
@@ -34,33 +57,23 @@ export async function getScormState(enrollmentId: string) {
 }
 
 /**
- * Sets a SCORM state key and synchronizes overall enrollment progress and completion status.
- *
- * @param {string} enrollmentId - The enrollment ID.
- * @param {string} key - SCORM CMI key.
- * @param {string} value - SCORM value.
- * @returns {Promise<boolean>} Success indicator.
+ * Sets a SCORM state key and synchronizes overall enrollment progress for the owning learner.
  */
 export async function setScormState(enrollmentId: string, key: string, value: string) {
+  await verifyEnrollmentOwnership(enrollmentId);
+
   await prisma.scormState.upsert({
     where: {
       enrollmentId_cmiKey: {
         enrollmentId,
-        cmiKey: key
-      }
+        cmiKey: key,
+      },
     },
-    update: {
-      cmiValue: value
-    },
-    create: {
-      enrollmentId,
-      cmiKey: key,
-      cmiValue: value
-    }
+    update: { cmiValue: value },
+    create: { enrollmentId, cmiKey: key, cmiValue: value },
   });
 
-  // Track real-time progress percentages in Enrollment
-  if (key === 'cmi.progress_measure') {
+  if (key === "cmi.progress_measure") {
     const parsed = parseFloat(value);
     if (!isNaN(parsed)) {
       const pVal = Math.min(100, Math.max(0, Math.round(parsed <= 1.0 ? parsed * 100 : parsed)));
@@ -68,27 +81,26 @@ export async function setScormState(enrollmentId: string, key: string, value: st
         where: { id: enrollmentId },
         data: {
           progress: pVal,
-          status: pVal >= 100 ? 'COMPLETED' : 'IN_PROGRESS',
+          status: pVal >= 100 ? "COMPLETED" : "IN_PROGRESS",
           completedAt: pVal >= 100 ? new Date() : undefined,
           lastAccess: new Date(),
-        }
+        },
       });
     }
   }
 
-  // If completion status is set
   if (
-    (key === 'cmi.completion_status' && value === 'completed') ||
-    (key === 'cmi.core.lesson_status' && (value === 'completed' || value === 'passed'))
+    (key === "cmi.completion_status" && value === "completed") ||
+    (key === "cmi.core.lesson_status" && (value === "completed" || value === "passed"))
   ) {
     await prisma.enrollment.update({
       where: { id: enrollmentId },
       data: {
-        status: 'COMPLETED',
+        status: "COMPLETED",
         progress: 100,
         completedAt: new Date(),
         lastAccess: new Date(),
-      }
+      },
     });
   }
 
@@ -96,56 +108,62 @@ export async function setScormState(enrollmentId: string, key: string, value: st
 }
 
 /**
- * Updates progress for native modular courses.
- * Calculates completion percentage across the bite-sized module list,
- * updates Enrollment progress and ScormState ('cmi.progress_measure'),
- * and unlocks course completion when all modules are finished.
- *
- * @param {string} enrollmentId - The enrollment ID.
- * @param {string[]} completedModuleIds - List of completed module identifiers.
- * @param {number} totalModules - Total number of modules in the curriculum.
- * @returns {Promise<{ success: boolean; progress: number }>} Updated progress status.
+ * Updates progress for native modular courses after verifying enrollment ownership.
  */
 export async function updateNativeModuleProgress(
   enrollmentId: string,
   completedModuleIds: string[],
   totalModules: number
 ) {
-  const percent = totalModules > 0
-    ? Math.min(100, Math.round((completedModuleIds.length / totalModules) * 100))
-    : 0;
+  await verifyEnrollmentOwnership(enrollmentId);
+
+  const uniqueCompleted = Array.from(new Set(completedModuleIds)).slice(
+    0,
+    Math.max(1, totalModules)
+  );
+  const percent =
+    totalModules > 0
+      ? Math.min(100, Math.round((uniqueCompleted.length / totalModules) * 100))
+      : 0;
 
   await prisma.enrollment.update({
     where: { id: enrollmentId },
     data: {
       progress: percent,
-      status: percent >= 100 ? 'COMPLETED' : 'IN_PROGRESS',
+      status: percent >= 100 ? "COMPLETED" : "IN_PROGRESS",
       completedAt: percent >= 100 ? new Date() : undefined,
       lastAccess: new Date(),
-    }
-  });
-
-  // Store completed module IDs in scormState as well for cross-compatibility
-  await prisma.scormState.upsert({
-    where: {
-      enrollmentId_cmiKey: {
-        enrollmentId,
-        cmiKey: 'awief.native.completed_modules'
-      }
     },
-    update: { cmiValue: JSON.stringify(completedModuleIds) },
-    create: { enrollmentId, cmiKey: 'awief.native.completed_modules', cmiValue: JSON.stringify(completedModuleIds) }
   });
 
   await prisma.scormState.upsert({
     where: {
       enrollmentId_cmiKey: {
         enrollmentId,
-        cmiKey: 'cmi.progress_measure'
-      }
+        cmiKey: "awief.native.completed_modules",
+      },
+    },
+    update: { cmiValue: JSON.stringify(uniqueCompleted) },
+    create: {
+      enrollmentId,
+      cmiKey: "awief.native.completed_modules",
+      cmiValue: JSON.stringify(uniqueCompleted),
+    },
+  });
+
+  await prisma.scormState.upsert({
+    where: {
+      enrollmentId_cmiKey: {
+        enrollmentId,
+        cmiKey: "cmi.progress_measure",
+      },
     },
     update: { cmiValue: (percent / 100).toFixed(2) },
-    create: { enrollmentId, cmiKey: 'cmi.progress_measure', cmiValue: (percent / 100).toFixed(2) }
+    create: {
+      enrollmentId,
+      cmiKey: "cmi.progress_measure",
+      cmiValue: (percent / 100).toFixed(2),
+    },
   });
 
   if (percent >= 100) {
@@ -153,11 +171,15 @@ export async function updateNativeModuleProgress(
       where: {
         enrollmentId_cmiKey: {
           enrollmentId,
-          cmiKey: 'cmi.completion_status'
-        }
+          cmiKey: "cmi.completion_status",
+        },
       },
-      update: { cmiValue: 'completed' },
-      create: { enrollmentId, cmiKey: 'cmi.completion_status', cmiValue: 'completed' }
+      update: { cmiValue: "completed" },
+      create: {
+        enrollmentId,
+        cmiKey: "cmi.completion_status",
+        cmiValue: "completed",
+      },
     });
   }
 
@@ -165,54 +187,64 @@ export async function updateNativeModuleProgress(
 }
 
 /**
- * Retrieves the enrollment ID for a user and course, creating it if requested.
- *
- * @param {string} userId - User ID.
- * @param {string} courseId - Course ID.
- * @param {boolean} createIfMissing - Whether to auto-create if missing.
- * @returns {Promise<string | null>} The enrollment ID.
+ * Retrieves the verified enrollment ID for the signed-in user.
+ * Auto-creates only for free courses or Admin/Reviewer inspection (blocks unpaid bypass).
  */
-export async function getEnrollmentId(userId: string, courseId: string, createIfMissing: boolean = false) {
+export async function getEnrollmentId(
+  _ignoredUserId: string,
+  courseId: string,
+  createIfMissing: boolean = false
+) {
+  const session = await getServerSession(authOptions);
+  const userId = (session?.user as { id?: string } | undefined)?.id;
+  const role = (session?.user as { role?: string } | undefined)?.role || "STUDENT";
+  if (!userId) return null;
+
   let enrollment = await prisma.enrollment.findUnique({
     where: {
       userId_courseId: {
         userId,
-        courseId
-      }
-    }
+        courseId,
+      },
+    },
   });
 
   if (!enrollment && createIfMissing) {
-    enrollment = await prisma.enrollment.create({
-      data: {
-        userId,
-        courseId,
-        status: 'IN_PROGRESS'
-      }
+    const course = await prisma.course.findUnique({
+      where: { id: courseId },
+      select: { id: true, isFree: true },
     });
+    if (course && (course.isFree || role === "ADMIN" || role === "REVIEWER")) {
+      enrollment = await prisma.enrollment.create({
+        data: {
+          userId,
+          courseId,
+          status: "IN_PROGRESS",
+        },
+      });
+    }
   }
 
   return enrollment?.id || null;
 }
 
 /**
- * Retrieves all quizzes belonging to a specific course and the learner's attempt history.
- *
- * @param {string} courseId - Course ID.
- * @param {string} userId - Optional user ID.
- * @returns {Promise<{ quizzes: any[]; attempts: any[] }>} Course quizzes and attempt grades.
+ * Retrieves course quizzes (without exposing answer keys) and the signed-in learner's attempts.
  */
-export async function getCourseQuizzesAndGrades(courseId: string, userId?: string) {
+export async function getCourseQuizzesAndGrades(courseId: string, _ignoredUserId?: string) {
+  const session = await getServerSession(authOptions);
+  const userId = (session?.user as { id?: string } | undefined)?.id;
+
   const quizzes = await prisma.quiz.findMany({
     where: { courseId },
-    orderBy: { id: "asc" }
+    orderBy: { id: "asc" },
   });
 
   const parsedQuizzes = quizzes.map((q) => {
-    let questions = [];
+    let questions: ReturnType<typeof stripQuizAnswersForClient> = [];
     try {
-      questions = JSON.parse(q.questionsJson);
-    } catch (e) {
+      questions = stripQuizAnswersForClient(JSON.parse(q.questionsJson));
+    } catch {
       questions = [];
     }
     return {
@@ -221,18 +253,34 @@ export async function getCourseQuizzesAndGrades(courseId: string, userId?: strin
       courseId: q.courseId,
       name: q.name,
       intro: q.intro,
-      questions
+      questions,
     };
   });
 
-  let attempts: any[] = [];
+  let attempts: Array<{
+    id: string;
+    quizId: string;
+    score: number;
+    maxScore: number;
+    passed: boolean;
+    createdAt: Date;
+  }> = [];
+
   if (userId && parsedQuizzes.length > 0) {
     attempts = await prisma.quizAttempt.findMany({
       where: {
         userId,
-        quizId: { in: parsedQuizzes.map((q) => q.id) }
+        quizId: { in: parsedQuizzes.map((q) => q.id) },
       },
-      orderBy: { createdAt: "desc" }
+      select: {
+        id: true,
+        quizId: true,
+        score: true,
+        maxScore: true,
+        passed: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: "desc" },
     });
   }
 
@@ -240,35 +288,31 @@ export async function getCourseQuizzesAndGrades(courseId: string, userId?: strin
 }
 
 /**
- * Submits a graded assessment attempt directly within the course player.
- *
- * @param {string} userId - User ID.
- * @param {string} quizId - Quiz Key / ID.
- * @param {number} score - Points earned.
- * @param {number} maxScore - Maximum possible points.
- * @param {string} details - JSON string of question-level answers.
- * @returns {Promise<{ passed: boolean; percentage: number }>} Assessment result.
+ * Grades and persists a learner's module assessment strictly on the server
+ * from submitted answer selections (ignoring client-provided scores).
  */
 export async function submitCourseQuizAttempt(
-  userId: string,
   quizId: string,
-  score: number,
-  maxScore: number,
-  details?: string
+  selectedAnswersByQuestionId: Record<string, number | null>
 ) {
-  const percentage = maxScore > 0 ? Math.round((score / maxScore) * 100) : 0;
-  const passed = percentage >= 80;
+  const { userId } = await requireAuthenticatedUser();
+  const graded = await gradeQuizOnServer(quizId, selectedAnswersByQuestionId);
 
   await prisma.quizAttempt.create({
     data: {
       userId,
       quizId,
-      score,
-      maxScore,
-      passed,
-      details,
-    }
+      score: graded.score,
+      maxScore: graded.maxScore,
+      passed: graded.passed,
+      details: JSON.stringify(graded.details),
+    },
   });
 
-  return { passed, percentage };
+  return {
+    passed: graded.passed,
+    percentage: graded.percentage,
+    score: graded.score,
+    maxScore: graded.maxScore,
+  };
 }

@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { decryptPii } from "@/lib/encryption";
 import Navbar from "@/components/Navbar";
 import DashboardNav from "@/app/dashboard/Nav";
 import Footer from "@/components/Footer";
@@ -82,7 +83,12 @@ export default async function CourseOverviewPage(props: {
     isVerified: r.isVerified,
     createdAt: r.createdAt.toISOString(),
     updatedAt: r.updatedAt.toISOString(),
-    user: r.user,
+    user: r.user
+      ? {
+          ...r.user,
+          organization: decryptPii(r.user.organization),
+        }
+      : null,
   }));
 
   const currentUserReview = currentUserReviewId

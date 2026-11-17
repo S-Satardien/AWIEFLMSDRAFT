@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { submitQuizAttempt, submitQuizReviewComment, getQuizComments, updateQuizComment, deleteQuizComment } from "./actions";
+import { sanitizeHtml } from "@/lib/sanitize";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -84,30 +85,15 @@ export default function QuizClient({ quiz, userId, role, reviewMode = false }: {
 
   const handleSubmit = async () => {
     setIsSubmitting(true);
-    let score = 0;
-    const detailsObj: Record<string, { isCorrect: boolean, selectedAnswerId: number | null }> = {};
-    
-    // Calculate score and build details
+    const selectedAnswersMap: Record<string, number | null> = {};
+
     quiz.questions.forEach((q: any) => {
-      const selectedId = selectedAnswers[q.id] || null;
-      const correctAns = q.answers.find((a: any) => a.isCorrect);
-      const isCorrect = correctAns && selectedId === correctAns.id;
-      
-      if (isCorrect) {
-        score += 1;
-      }
-      
-      detailsObj[q.id.toString()] = {
-        isCorrect: !!isCorrect,
-        selectedAnswerId: selectedId,
-      };
+      selectedAnswersMap[q.id.toString()] = selectedAnswers[q.id] ?? null;
     });
 
     try {
-      const detailsStr = JSON.stringify(detailsObj);
-      const res = await submitQuizAttempt(userId, quiz.id.toString(), score, totalQuestions, detailsStr);
+      const res = await submitQuizAttempt(quiz.id.toString(), selectedAnswersMap);
       setResult(res);
-      // Clear saved progress
       localStorage.removeItem(`vacfa-quiz-state-${userId}-${quiz.id}`);
     } catch (e) {
       console.error(e);
@@ -355,7 +341,7 @@ export default function QuizClient({ quiz, userId, role, reviewMode = false }: {
             {/* Question Text */}
             <div 
               className="text-2xl font-medium text-gray-900 mb-8 prose prose-lg max-w-none prose-p:my-2"
-              dangerouslySetInnerHTML={{ __html: currentQuestion.questiontext }}
+              dangerouslySetInnerHTML={{ __html: sanitizeHtml(currentQuestion.questiontext) }}
             />
 
             {/* Answers */}
@@ -380,7 +366,7 @@ export default function QuizClient({ quiz, userId, role, reviewMode = false }: {
                       </div>
                       <div 
                         className={`text-lg prose prose-p:my-0 ${isSelected ? 'text-vacfa-red font-medium' : 'text-gray-700'}`}
-                        dangerouslySetInnerHTML={{ __html: ans.text }}
+                        dangerouslySetInnerHTML={{ __html: sanitizeHtml(ans.text) }}
                       />
                     </div>
                   </button>

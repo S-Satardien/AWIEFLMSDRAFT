@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { verifyCertificateSignature } from "@/lib/cryptoCert";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
@@ -23,11 +24,23 @@ export default async function CertificateVerifyPage(props: {
   const certificate = await prisma.certificate.findUnique({
     where: { certificateNumber: certificateId },
     include: {
-      course: true,
-      user: true,
-      enrollment: true
+      course: { select: { id: true, title: true } },
+      user: { select: { name: true, sector: true, country: true } },
+      enrollment: { select: { status: true, progress: true } }
     }
   });
+
+  const sigCheck = certificate
+    ? verifyCertificateSignature({
+        certificateNumber: certificate.certificateNumber,
+        userId: certificate.userId,
+        courseId: certificate.courseId,
+        issuedAt: certificate.issuedAt,
+        storedSignature: certificate.qrCodeData,
+      })
+    : null;
+
+  const isAuthentic = Boolean(certificate && sigCheck?.authentic);
 
   return (
     <div className="min-h-screen bg-[#FDF8F9] flex flex-col selection:bg-[#7F3D59] selection:text-white">
@@ -36,7 +49,7 @@ export default async function CertificateVerifyPage(props: {
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16 flex-1 w-full">
         <div className="bg-white rounded-3xl shadow-xl border border-[#EAD7E0] p-8 sm:p-12 text-center space-y-8">
           
-          {certificate ? (
+          {isAuthentic && certificate ? (
             <>
               <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs font-extrabold uppercase tracking-wider">
                 <Check className="w-3.5 h-3.5 text-emerald-700" />
@@ -110,7 +123,11 @@ export default async function CertificateVerifyPage(props: {
                 <div className="pt-3 border-t border-[#EAD7E0] flex items-center justify-between text-[11px] text-gray-500">
                   <span className="flex items-center gap-1.5 text-emerald-700 font-semibold">
                     <ShieldCheck className="w-3.5 h-3.5 text-emerald-700" />
-                    <span>Cryptographic Hash Verified</span>
+                    <span>
+                      {sigCheck?.mode === "HMAC_V1"
+                        ? "HMAC-SHA256 Cryptographic Signature Verified"
+                        : "Registry Record Verified"}
+                    </span>
                   </span>
                   <span>UN ECOSOC Accredited</span>
                 </div>

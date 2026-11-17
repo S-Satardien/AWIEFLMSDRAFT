@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { stripQuizAnswersForClient } from "@/lib/quizGrader";
 import fs from "fs";
 import path from "path";
 import QuizClient from "./QuizClient";
@@ -56,7 +57,7 @@ export default async function QuizPage(props: {
         id: dbQuiz.quizKey,
         name: dbQuiz.name,
         intro: dbQuiz.intro,
-        questions,
+        questions: stripQuizAnswersForClient(questions),
       };
     }
   } catch (e) {
@@ -69,7 +70,13 @@ export default async function QuizPage(props: {
       const quizzesPath = path.join(process.cwd(), "public", "moodle_quizzes.json");
       if (fs.existsSync(quizzesPath)) {
         const quizzesData = JSON.parse(fs.readFileSync(quizzesPath, "utf-8"));
-        quiz = quizzesData.find((q: any) => q.id.toString() === id);
+        const rawQuiz = quizzesData.find((q: any) => q.id.toString() === id);
+        if (rawQuiz) {
+          quiz = {
+            ...rawQuiz,
+            questions: stripQuizAnswersForClient(rawQuiz.questions || []),
+          };
+        }
       }
     } catch (e) {
       console.error("Failed to read quizzes JSON file:", e);

@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/lib/auth";
 import fs from "fs";
 import fsp from "fs/promises";
 import path from "path";
@@ -57,6 +59,14 @@ export async function GET(
       return NextResponse.json({ error: "Not found." }, { status: 404 });
     }
 
+    const kind = segments[0]?.toLowerCase() || "";
+    if (kind !== "image") {
+      const session = await getServerSession(authOptions);
+      if (!session?.user) {
+        return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+      }
+    }
+
     const uploadsRoot = path.resolve(process.cwd(), "public", "uploads");
     const targetPath = path.resolve(uploadsRoot, ...segments);
 
@@ -79,7 +89,11 @@ export async function GET(
     const headers = new Headers();
     headers.set("Content-Type", contentType);
     headers.set("Accept-Ranges", "bytes");
-    headers.set("Cache-Control", "public, max-age=3600");
+    headers.set("X-Content-Type-Options", "nosniff");
+    headers.set(
+      "Cache-Control",
+      kind === "image" ? "public, max-age=3600" : "private, no-store"
+    );
     if (downloadFlag) {
       headers.set("Content-Disposition", `attachment; filename="${baseName}"`);
     }

@@ -3,6 +3,7 @@
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { decryptPii } from "@/lib/encryption";
 
 export async function getDashboardData() {
   const session = await getServerSession(authOptions);
@@ -152,11 +153,11 @@ export async function getDashboardData() {
     userName: user.name || user.email.split("@")[0],
     userEmail: user.email,
     userCountry: user.country,
-    organization: user.organization,
+    organization: decryptPii(user.organization),
     profession: user.profession,
     businessStage: user.businessStage,
     sector: user.sector,
-    headline: user.headline,
+    headline: decryptPii(user.headline),
     enrolledCourses,
     totalCourses,
     completedCourses,
@@ -170,8 +171,18 @@ export async function getDashboardData() {
 }
 
 export async function getLeaderboard() {
+  const session = await getServerSession(authOptions);
+  if (!session?.user) return [];
+
   const users = await prisma.user.findMany({
-    include: {
+    where: { showOnLeaderboard: true },
+    select: {
+      id: true,
+      name: true,
+      country: true,
+      organization: true,
+      profession: true,
+      showOnLeaderboard: true,
       enrollments: {
         include: {
           scormState: true,
@@ -213,7 +224,7 @@ export async function getLeaderboard() {
       id: u.id,
       name: u.name,
       country: u.country,
-      organization: u.organization,
+      organization: decryptPii(u.organization),
       profession: u.profession,
       showOnLeaderboard: u.showOnLeaderboard,
       points,

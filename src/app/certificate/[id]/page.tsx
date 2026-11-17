@@ -4,6 +4,8 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import crypto from "crypto";
+import QRCode from "qrcode";
+import { signCertificatePayload } from "@/lib/cryptoCert";
 import CertificateActions from "./CertificateActions";
 import DashboardNav from "@/app/dashboard/Nav";
 import Footer from "@/components/Footer";
@@ -140,12 +142,19 @@ export default async function CertificatePage(props: {
     );
   }
 
-  // Get or create certificate record
+  // Get or create cryptographically signed certificate record
   let certificate = enrollment.certificate;
   if (!certificate) {
     const randomCode = crypto.randomBytes(3).toString("hex").toUpperCase();
     const codePart = courseId.replace(/[^a-zA-Z0-9]/g, "").substring(0, 4).toUpperCase() || "MAST";
     const certNum = `CERT-AWIEF-2026-${codePart}-${randomCode}`;
+    const issuedAt = new Date();
+    const hmacSig = signCertificatePayload({
+      certificateNumber: certNum,
+      userId,
+      courseId,
+      issuedAt,
+    });
 
     certificate = await prisma.certificate.create({
       data: {
@@ -155,7 +164,8 @@ export default async function CertificatePage(props: {
         courseId,
         recipientName: enrollment.user.name || enrollment.user.email,
         courseTitle: enrollment.course.title,
-        qrCodeData: `/verify/${certNum}`
+        issuedAt,
+        qrCodeData: hmacSig,
       },
     });
   }
@@ -169,8 +179,15 @@ export default async function CertificatePage(props: {
     }
   );
 
-  const verificationUrl = `${process.env.NEXTAUTH_URL || 'https://awief-lms.vercel.app'}/verify/${certificate.certificateNumber}`;
-  const qrCodeImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(verificationUrl)}&color=1D0B14`;
+  const verificationUrl = `${(process.env.NEXTAUTH_URL || 'https://awieflmsdraft.vercel.app').replace(/\/$/, "")}/verify/${certificate.certificateNumber}`;
+  const qrCodeImageUrl = await QRCode.toDataURL(verificationUrl, {
+    width: 220,
+    margin: 1,
+    color: {
+      dark: "#1D0B14",
+      light: "#FFFFFF",
+    },
+  });
 
   const existingReview = await prisma.courseReview.findUnique({
     where: {

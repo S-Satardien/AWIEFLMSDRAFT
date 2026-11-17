@@ -19,6 +19,8 @@ import {
   getSampleScormManifestXml,
 } from "@/lib/scormImporter";
 import { extractZipEntries } from "@/lib/zipUtils";
+import { decryptPii, decryptUserPiiFields } from "@/lib/encryption";
+import { logAuditEvent, SAFE_USER_SELECT } from "@/lib/audit";
 
 /**
  * Fetches comprehensive administrative data including learners, courses,
@@ -78,7 +80,7 @@ export async function getAdminData() {
         createdAt: user.createdAt,
         lastActiveDate: user.lastActiveDate,
         country: user.country,
-        organization: user.organization,
+        organization: decryptPii(user.organization),
         profession: user.profession,
         businessStage: user.businessStage,
         sector: user.sector,
@@ -94,12 +96,12 @@ export async function getAdminData() {
 
   // 2. Fetch Review Comments
   const reviewComments = await prisma.reviewComment.findMany({
-    include: { user: true },
+    include: { user: { select: { id: true, name: true, email: true, role: true } } },
     orderBy: { createdAt: 'desc' }
   });
 
   // 3. Fetch Survey Responses
-  const surveyResponses = await prisma.courseSurveyResponse.findMany({
+  const surveyResponsesRaw = await prisma.courseSurveyResponse.findMany({
     include: {
       user: {
         select: {
@@ -120,6 +122,18 @@ export async function getAdminData() {
     },
     orderBy: { createdAt: 'desc' }
   });
+
+  const surveyResponses = surveyResponsesRaw.map((sr) => ({
+    ...sr,
+    q8_applicationOpenEnded: decryptPii(sr.q8_applicationOpenEnded) || "",
+    q9_recommendedCoursesOpenEnded: decryptPii(sr.q9_recommendedCoursesOpenEnded) || "",
+    user: sr.user
+      ? {
+          ...sr.user,
+          organization: decryptPii(sr.user.organization),
+        }
+      : sr.user,
+  }));
 
   // 4. Fetch Certificates
   const certificates = await prisma.certificate.findMany({
@@ -810,13 +824,27 @@ export async function exportAllPlatformData() {
     throw new Error("Unauthorized.");
   }
 
-  const [courses, users, transactions, certificates, surveys] = await Promise.all([
+  const [courses, rawUsers, transactions, certificates, rawSurveys] = await Promise.all([
     prisma.course.findMany(),
-    prisma.user.findMany({ select: { id: true, email: true, name: true, role: true, country: true, organization: true, sector: true, businessStage: true, createdAt: true } }),
+    prisma.user.findMany({ select: SAFE_USER_SELECT }),
     prisma.transaction.findMany(),
     prisma.certificate.findMany(),
     prisma.courseSurveyResponse.findMany(),
   ]);
+
+  const users = rawUsers.map((u) => decryptUserPiiFields(u));
+  const surveys = rawSurveys.map((s) => ({
+    ...s,
+    q8_applicationOpenEnded: decryptPii(s.q8_applicationOpenEnded) || "",
+    q9_recommendedCoursesOpenEnded: decryptPii(s.q9_recommendedCoursesOpenEnded) || "",
+  }));
+
+  await logAuditEvent({
+    actorId: (session.user as { id?: string }).id || null,
+    actorEmail: session.user.email || null,
+    action: "ADMIN_EXPORT_ALL_DATA",
+    targetType: "Platform",
+  });
 
   return {
     exportedAt: new Date().toISOString(),
@@ -884,15 +912,24 @@ export async function createUser(email: string, name: string, role: string): Pro
       return { success: false, error: "A user with this email already exists." };
     }
 
-    const hashedPassword = await bcrypt.hash("changeme123", 10);
+    const hashedPassword = await bcrypt.hash("changeme123", 12);
     
-    await prisma.user.create({
+    const createdUser = await prisma.user.create({
       data: {
         email: cleanEmail,
         name: cleanName || cleanEmail.split('@')[0],
         role: cleanRole,
         password: hashedPassword
       }
+    });
+
+    await logAuditEvent({
+      actorId: (session.user as { id?: string }).id || null,
+      actorEmail: session.user.email || null,
+      action: "ADMIN_CREATE_USER",
+      targetType: "User",
+      targetId: createdUser.id,
+      details: `role=${cleanRole}`,
     });
 
     return { success: true };
@@ -914,6 +951,13 @@ export async function deleteUser(userId: string): Promise<{ success: boolean; er
     }
 
     await prisma.user.delete({ where: { id: userId } });
+    await logAuditEvent({
+      actorId: (session.user as { id?: string }).id || null,
+      actorEmail: session.user.email || null,
+      action: "ADMIN_DELETE_USER",
+      targetType: "User",
+      targetId: userId,
+    });
     return { success: true };
   } catch (error: any) {
     console.error("Error deleting user:", error);
@@ -930,7 +974,16 @@ export async function updateUserRole(userId: string, role: string): Promise<{ su
 
     await prisma.user.update({
       where: { id: userId },
-      data: { role }
+      data: { role, tokenVersion: { increment: 1 } }
+    });
+
+    await logAuditEvent({
+      actorId: (session.user as { id?: string }).id || null,
+      actorEmail: session.user.email || null,
+      action: "ADMIN_UPDATE_ROLE",
+      targetType: "User",
+      targetId: userId,
+      details: `role=${role}`,
     });
 
     return { success: true };
@@ -947,10 +1000,18 @@ export async function resetPasswordAdmin(userId: string): Promise<{ success: boo
       return { success: false, error: "Unauthorized: Administrator access required." };
     }
 
-    const defaultHashed = await bcrypt.hash("changeme123", 10);
+    const defaultHashed = await bcrypt.hash("changeme123", 12);
     await prisma.user.update({
       where: { id: userId },
-      data: { password: defaultHashed }
+      data: { password: defaultHashed, tokenVersion: { increment: 1 }, failedLoginAttempts: 0, lockedUntil: null }
+    });
+
+    await logAuditEvent({
+      actorId: (session.user as { id?: string }).id || null,
+      actorEmail: session.user.email || null,
+      action: "ADMIN_RESET_PASSWORD",
+      targetType: "User",
+      targetId: userId,
     });
 
     return { success: true };
@@ -1096,6 +1157,15 @@ export async function getStudentFullProfile(userId: string) {
   });
 
   if (!user) return null;
+  const decryptedUser = decryptUserPiiFields(user);
+
+  await logAuditEvent({
+    actorId: (session.user as { id?: string }).id || null,
+    actorEmail: session.user.email || null,
+    action: "ADMIN_VIEW_STUDENT_360",
+    targetType: "User",
+    targetId: userId,
+  });
 
   // Compute clean enrollment summaries
   const enrollments = user.enrollments.map((e) => {
@@ -1129,28 +1199,28 @@ export async function getStudentFullProfile(userId: string) {
   });
 
   return {
-    id: user.id,
-    name: user.name,
-    email: user.email,
-    role: user.role,
-    country: user.country,
-    city: user.city,
-    headline: user.headline,
-    bio: user.bio,
-    organization: user.organization,
-    profession: user.profession,
-    businessStage: user.businessStage,
-    sector: user.sector,
-    awiefProgram: user.awiefProgram,
-    yearsInBusiness: user.yearsInBusiness,
-    website: user.website,
-    linkedinUrl: user.linkedinUrl,
-    twitterUrl: user.twitterUrl,
-    skills: user.skills,
-    education: user.education,
-    currentStreak: user.currentStreak,
-    createdAt: user.createdAt.toISOString(),
-    lastActiveDate: user.lastActiveDate ? user.lastActiveDate.toISOString() : null,
+    id: decryptedUser.id,
+    name: decryptedUser.name,
+    email: decryptedUser.email,
+    role: decryptedUser.role,
+    country: decryptedUser.country,
+    city: decryptedUser.city,
+    headline: decryptedUser.headline,
+    bio: decryptedUser.bio,
+    organization: decryptedUser.organization,
+    profession: decryptedUser.profession,
+    businessStage: decryptedUser.businessStage,
+    sector: decryptedUser.sector,
+    awiefProgram: decryptedUser.awiefProgram,
+    yearsInBusiness: decryptedUser.yearsInBusiness,
+    website: decryptedUser.website,
+    linkedinUrl: decryptedUser.linkedinUrl,
+    twitterUrl: decryptedUser.twitterUrl,
+    skills: decryptedUser.skills,
+    education: decryptedUser.education,
+    currentStreak: decryptedUser.currentStreak,
+    createdAt: decryptedUser.createdAt.toISOString(),
+    lastActiveDate: decryptedUser.lastActiveDate ? decryptedUser.lastActiveDate.toISOString() : null,
     enrollments,
     quizAttempts: user.quizAttempts.map((q) => ({
       id: q.id,
@@ -1303,7 +1373,7 @@ export async function getCourseRoster(courseId?: string) {
   const enrollments = await prisma.enrollment.findMany({
     where: whereClause,
     include: {
-      user: true,
+      user: { select: SAFE_USER_SELECT },
       course: { select: { id: true, title: true, category: true } },
       scormState: true,
       certificate: true,
@@ -1347,8 +1417,8 @@ export async function getCourseRoster(courseId?: string) {
       studentName: e.user.name || "Anonymous",
       email: e.user.email,
       country: e.user.country || "ZA",
-      city: e.user.city || "",
-      organization: e.user.organization || "Independent Enterprise",
+      city: decryptPii(e.user.city) || "",
+      organization: decryptPii(e.user.organization) || "Independent Enterprise",
       profession: e.user.profession || "Founder",
       businessStage: e.user.businessStage || "Growth Stage",
       sector: e.user.sector || "Enterprise",

@@ -1,15 +1,19 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { encryptUserPiiFields } from "@/lib/encryption";
+import { logAuditEvent } from "@/lib/audit";
 import bcrypt from "bcryptjs";
+
+const BCRYPT_ROUNDS = 12;
 
 export interface RegisterFormData {
   name: string;
   email: string;
   password: string;
   country: string;
-  organization: string; // Business or Enterprise Name
-  profession?: string;  // Founder, CEO, Managing Director
+  organization: string;
+  profession?: string;
   businessStage?: string;
   sector?: string;
   awiefProgram?: string;
@@ -21,11 +25,9 @@ export interface RegisterFormData {
 
 /**
  * Registers an African woman entrepreneur or enterprise leader on the AWIEF Academy.
- * Auto-hashes passwords, creates the User record with Pan-African demographic data,
- * and activates their primary masterclass enrollment.
- *
- * @param {RegisterFormData} formData - Registration parameters.
- * @returns {Promise<{ success: boolean; error?: string; userId?: string }>} Registration outcome.
+ * Enforces bcrypt-12 password hashing, encrypts sensitive PII fields with AES-256-GCM,
+ * records explicit POPIA/GDPR consent timestamp, defaults leaderboard visibility to opt-in,
+ * and auto-enrolls only into verified free courses (preventing paid course bypass).
  */
 export async function registerUser(formData: RegisterFormData) {
   try {
@@ -42,36 +44,49 @@ export async function registerUser(formData: RegisterFormData) {
       yearsInBusiness,
       isAwiefAlumni,
       goals,
-      courseId
+      courseId,
     } = formData;
 
     if (!email || !email.includes("@")) {
-      return { success: false, error: "Please provide a valid business email address." };
+      return {
+        success: false,
+        error: "Please provide a valid business email address.",
+      };
     }
 
     if (!password || password.length < 8) {
-      return { success: false, error: "Password must be at least 8 characters long." };
+      return {
+        success: false,
+        error: "Password must be at least 8 characters long.",
+      };
     }
 
     if (!name || !name.trim()) {
-      return { success: false, error: "Please provide your full legal name for certificate issuance." };
+      return {
+        success: false,
+        error: "Please provide your full legal name for certificate issuance.",
+      };
     }
 
     const normalizedEmail = email.trim().toLowerCase();
-
-    // Check if user already exists
     const existingUser = await prisma.user.findUnique({
-      where: { email: normalizedEmail }
+      where: { email: normalizedEmail },
+      select: { id: true },
     });
 
     if (existingUser) {
       return {
         success: false,
-        error: "An account with this email address already exists. Please sign in instead."
+        error:
+          "An account with this email address already exists. Please sign in instead.",
       };
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = await bcrypt.hash(password, BCRYPT_ROUNDS);
+    const encryptedFields = encryptUserPiiFields({
+      organization: organization ? organization.trim() : null,
+      goals: goals ? goals.trim() : null,
+    });
 
     const user = await prisma.user.create({
       data: {
@@ -79,46 +94,57 @@ export async function registerUser(formData: RegisterFormData) {
         name: name.trim(),
         password: hashedPassword,
         country: country || "ZA",
-        organization: organization ? organization.trim() : null,
+        organization: encryptedFields.organization as string | null,
         profession: profession ? profession.trim() : "Founder / CEO",
         businessStage: businessStage || "Growth / Scale-up",
         sector: sector || "Agribusiness & Agritech",
         awiefProgram: awiefProgram || "AWIEF Growth Accelerator",
         yearsInBusiness: yearsInBusiness || "1-3 years",
         isAwiefAlumni: Boolean(isAwiefAlumni),
-        goals: goals ? goals.trim() : null,
+        goals: encryptedFields.goals as string | null,
         role: "STUDENT",
-        showOnLeaderboard: true
-      }
+        showOnLeaderboard: false,
+        consentAcceptedAt: new Date(),
+      },
     });
 
-    // Auto-enroll in requested course or default featured course
-    const targetCourseId = courseId || "investment-readiness";
-    
-    // Check if course exists
-    const courseExists = await prisma.course.findUnique({
-      where: { id: targetCourseId }
-    });
-
-    if (courseExists) {
-      await prisma.enrollment.create({
-        data: {
-          userId: user.id,
-          courseId: targetCourseId,
-          status: "IN_PROGRESS"
-        }
+    if (courseId) {
+      const targetCourse = await prisma.course.findUnique({
+        where: { id: courseId },
+        select: { id: true, isFree: true, isPublished: true },
       });
+
+      if (targetCourse && targetCourse.isPublished && targetCourse.isFree) {
+        await prisma.enrollment.create({
+          data: {
+            userId: user.id,
+            courseId: targetCourse.id,
+            status: "IN_PROGRESS",
+          },
+        });
+      }
     }
+
+    await logAuditEvent({
+      actorId: user.id,
+      actorEmail: user.email,
+      action: "USER_REGISTERED",
+      targetType: "User",
+      targetId: user.id,
+    });
 
     return {
       success: true,
-      userId: user.id
+      userId: user.id,
     };
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("User registration error:", err);
     return {
       success: false,
-      error: err.message || "An unexpected error occurred during registration."
+      error:
+        err instanceof Error
+          ? err.message
+          : "An unexpected error occurred during registration.",
     };
   }
 }

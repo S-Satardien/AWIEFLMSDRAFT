@@ -41,9 +41,11 @@ export function extractZipEntries(
   options?: {
     filter?: (normalizedName: string) => boolean;
     maxTotalBytes?: number;
+    maxEntries?: number;
   }
 ): ExtractedZipEntry[] {
   const maxTotalBytes = options?.maxTotalBytes ?? 250 * 1024 * 1024;
+  const maxEntries = options?.maxEntries ?? 5000;
   const entries: ExtractedZipEntry[] = [];
   let runningBytes = 0;
 
@@ -60,6 +62,9 @@ export function extractZipEntries(
   }
 
   const totalEntries = zipBuffer.readUInt16LE(eocdOffset + 10);
+  if (totalEntries > maxEntries) {
+    throw new Error("Archive exceeds maximum permitted entry count.");
+  }
   let cdOffset = zipBuffer.readUInt32LE(eocdOffset + 16);
 
   for (let idx = 0; idx < totalEntries; idx++) {

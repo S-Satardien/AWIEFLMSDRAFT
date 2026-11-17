@@ -22,6 +22,7 @@ import {
 } from './reviewActions';
 import { getCourseReviewStatusForCurrentUser } from '@/app/courses/[id]/reviewActions';
 import { CourseReviewComposer } from '@/components/CourseReviewsSection';
+import { sanitizeHtml } from '@/lib/sanitize';
 import {
   Wifi,
   Zap,
@@ -330,42 +331,28 @@ through investor due diligence, cashflow runway modeling, and cross-border trade
     URL.revokeObjectURL(url);
   };
 
-  // Submit Embedded Module Assessment
+  // Submit Embedded Module Assessment (graded authoritatively on server)
   const handleSubmitQuiz = async (quiz: any) => {
     if (!quiz || !session?.user) return;
     setIsSubmittingQuiz(true);
 
-    let correctCount = 0;
     const questions = quiz.questions || [];
-    const details: Record<string, any> = {};
+    const selectedAnswersMap: Record<string, number | null> = {};
 
     questions.forEach((q: any, qIdx: number) => {
       const selectedAnswerIdx = quizAnswers[qIdx];
       const selectedAnswer = q.answers ? q.answers[selectedAnswerIdx] : null;
-      const isCorrect = selectedAnswer ? Boolean(selectedAnswer.isCorrect) : false;
-
-      if (isCorrect) correctCount++;
-      details[q.id.toString()] = {
-        isCorrect,
-        selectedAnswerId: selectedAnswer?.id || null
-      };
+      selectedAnswersMap[q.id.toString()] = selectedAnswer?.id ?? null;
     });
 
-    const max = questions.length;
-    const res = await submitCourseQuizAttempt(
-      (session.user as any).id,
-      quiz.id,
-      correctCount,
-      max,
-      JSON.stringify(details)
-    );
+    const res = await submitCourseQuizAttempt(quiz.id, selectedAnswersMap);
 
-    setQuizScore({ score: correctCount, maxScore: max, passed: res.passed });
+    setQuizScore({ score: res.score, maxScore: res.maxScore, passed: res.passed });
     setQuizSubmitted(true);
     setIsSubmittingQuiz(false);
 
     // Refresh attempts
-    const updated = await getCourseQuizzesAndGrades(course.id, (session.user as any).id);
+    const updated = await getCourseQuizzesAndGrades(course.id);
     setQuizAttempts(updated.attempts || []);
   };
 
@@ -975,7 +962,7 @@ through investor due diligence, cashflow runway modeling, and cross-border trade
                           </span>
                           <div
                             className="text-xs sm:text-sm font-semibold text-gray-900 leading-snug"
-                            dangerouslySetInnerHTML={{ __html: q.questiontext || q.name }}
+                            dangerouslySetInnerHTML={{ __html: sanitizeHtml(q.questiontext || q.name) }}
                           ></div>
 
                           <div className="space-y-2 pt-2">
