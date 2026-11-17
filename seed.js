@@ -993,6 +993,8 @@ async function main() {
     },
   });
 
+  const baseUrl = (process.env.NEXTAUTH_URL || 'http://localhost:3000').replace(/\/$/, '');
+
   // Certificate for Learner User
   await prisma.certificate.upsert({
     where: { enrollmentId: e1.id },
@@ -1001,7 +1003,7 @@ async function main() {
       recipientName: 'Amara Okafor',
       courseTitle: 'Investment Readiness & Capital Raising for Women-Led SMEs',
       issuedAt: new Date('2026-11-03T16:05:00Z'),
-      qrCodeData: 'http://localhost:3000/verify/CERT-AWIEF-2026-INV-DEMO1',
+      qrCodeData: `${baseUrl}/verify/CERT-AWIEF-2026-INV-DEMO1`,
     },
     create: {
       certificateNumber: 'CERT-AWIEF-2026-INV-DEMO1',
@@ -1011,7 +1013,7 @@ async function main() {
       recipientName: 'Amara Okafor',
       courseTitle: 'Investment Readiness & Capital Raising for Women-Led SMEs',
       issuedAt: new Date('2026-11-03T16:05:00Z'),
-      qrCodeData: 'http://localhost:3000/verify/CERT-AWIEF-2026-INV-DEMO1',
+      qrCodeData: `${baseUrl}/verify/CERT-AWIEF-2026-INV-DEMO1`,
     },
   });
 
@@ -1268,25 +1270,37 @@ async function main() {
     });
   }
 
+  // Synchronize PostgreSQL serial sequence after seeding explicit Quiz IDs
+  if (process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith('postgres')) {
+    await prisma.$executeRawUnsafe(
+      `SELECT setval(pg_get_serial_sequence('"Quiz"', 'id'), COALESCE((SELECT MAX(id) FROM "Quiz"), 1), true);`
+    );
+  }
+
   // Also update public/moodle_quizzes.json for full sync
   const quizzesPath = path.join(__dirname, 'public', 'moodle_quizzes.json');
   fs.writeFileSync(quizzesPath, JSON.stringify(quizzes, null, 2), 'utf-8');
 
-  // Pre-seed a few passed quiz attempts for Learner User
-  await prisma.quizAttempt.create({
-    data: {
-      userId: learnerUser.id,
-      quizId: '1',
-      score: 3,
-      maxScore: 3,
-      passed: true,
-      details: JSON.stringify({
-        '101': { isCorrect: true, selectedAnswerId: 1001 },
-        '102': { isCorrect: true, selectedAnswerId: 1005 },
-        '103': { isCorrect: true, selectedAnswerId: 1009 },
-      }),
-    },
+  // Pre-seed a few passed quiz attempts for Learner User (idempotent)
+  const existingAttemptCount = await prisma.quizAttempt.count({
+    where: { userId: learnerUser.id, quizId: '1' },
   });
+  if (existingAttemptCount === 0) {
+    await prisma.quizAttempt.create({
+      data: {
+        userId: learnerUser.id,
+        quizId: '1',
+        score: 3,
+        maxScore: 3,
+        passed: true,
+        details: JSON.stringify({
+          '101': { isCorrect: true, selectedAnswerId: 1001 },
+          '102': { isCorrect: true, selectedAnswerId: 1005 },
+          '103': { isCorrect: true, selectedAnswerId: 1009 },
+        }),
+      },
+    });
+  }
 
   console.log('Seed completed successfully!');
   console.log('---------------------------------------------------------');

@@ -14,7 +14,7 @@ export default async function AdminPage() {
     <div className="min-h-screen bg-gray-50 pb-20">
       <DashboardNav />
       
-      <main className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+      <main className="max-w-[1540px] mx-auto py-8 px-4 sm:px-6 lg:px-8">
         <AdminClient initialData={data} />
       </main>
     </div>

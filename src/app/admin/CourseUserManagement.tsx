@@ -321,25 +321,19 @@ export default function CourseUserManagement({
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200 text-xs">
+            <table className="w-full divide-y divide-gray-200 text-xs">
               <thead className="bg-[#FDF8F9]">
                 <tr>
-                  <th className="px-5 py-3.5 text-left font-bold text-gray-700 uppercase tracking-wider">
+                  <th className="px-3.5 py-3 text-left font-bold text-gray-700 uppercase tracking-wider">
                     Founder / Student
                   </th>
-                  <th className="px-5 py-3.5 text-left font-bold text-gray-700 uppercase tracking-wider">
-                    Masterclass Track
+                  <th className="px-3 py-3 text-left font-bold text-gray-700 uppercase tracking-wider">
+                    Masterclass &amp; Access
                   </th>
-                  <th className="px-5 py-3.5 text-left font-bold text-gray-700 uppercase tracking-wider">
-                    Curriculum Progress
+                  <th className="px-3 py-3 text-left font-bold text-gray-700 uppercase tracking-wider">
+                    Progress &amp; Quizzes
                   </th>
-                  <th className="px-5 py-3.5 text-left font-bold text-gray-700 uppercase tracking-wider">
-                    Course Quizzes
-                  </th>
-                  <th className="px-5 py-3.5 text-left font-bold text-gray-700 uppercase tracking-wider">
-                    Enrollment Type
-                  </th>
-                  <th className="px-5 py-3.5 text-right font-bold text-gray-700 uppercase tracking-wider">
+                  <th className="px-3.5 py-3 text-right font-bold text-gray-700 uppercase tracking-wider">
                     Actions
                   </th>
                 </tr>
@@ -348,12 +342,12 @@ export default function CourseUserManagement({
                 {filteredRoster.map((item) => (
                   <tr key={item.enrollmentId} className="hover:bg-gray-50/70 transition-colors">
                     {/* Student Identity */}
-                    <td className="px-5 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-[#7F3D59] text-white flex items-center justify-center font-bold text-xs shrink-0">
+                    <td className="px-3.5 py-3 align-top">
+                      <div className="flex items-start gap-2.5">
+                        <div className="w-8 h-8 rounded-full bg-[#7F3D59] text-white flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">
                           {item.studentName.slice(0, 2).toUpperCase()}
                         </div>
-                        <div>
+                        <div className="min-w-0">
                           <button
                             type="button"
                             onClick={() => setInspectStudentId(item.userId)}
@@ -361,7 +355,9 @@ export default function CourseUserManagement({
                           >
                             {item.studentName}
                           </button>
-                          <span className="text-[11px] text-gray-400 block font-mono">{item.email}</span>
+                          <span className="text-[11px] text-gray-400 block font-mono break-all">
+                            {item.email}
+                          </span>
                           <span className="text-[10px] text-gray-500 block">
                             [{item.country}] {item.organization} • {item.businessStage}
                           </span>
@@ -369,21 +365,26 @@ export default function CourseUserManagement({
                       </div>
                     </td>
 
-                    {/* Masterclass Track */}
-                    <td className="px-5 py-4">
-                      <span className="font-serif font-bold text-gray-800 block truncate max-w-xs">
+                    {/* Masterclass Track & Enrollment Type */}
+                    <td className="px-3 py-3 align-top">
+                      <span className="font-serif font-bold text-gray-800 block line-clamp-2 max-w-[240px]">
                         {item.courseTitle}
                       </span>
-                      <span className="text-[10px] text-gray-400 font-mono">
-                        Active: {new Date(item.lastAccess).toLocaleDateString()}
-                      </span>
+                      <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#FDF8F9] text-[#7F3D59] border border-[#EAD7E0]">
+                          {item.gateway}
+                        </span>
+                        <span className="text-[10px] text-gray-400 font-mono">
+                          {new Date(item.lastAccess).toLocaleDateString()}
+                        </span>
+                      </div>
                     </td>
 
-                    {/* Progress */}
-                    <td className="px-5 py-4">
-                      <div className="space-y-1 w-32">
+                    {/* Progress & Course Quizzes */}
+                    <td className="px-3 py-3 align-top">
+                      <div className="space-y-1.5 w-32">
                         <div className="flex justify-between text-[11px] font-bold">
-                          <span className="text-gray-500">Rate:</span>
+                          <span className="text-gray-500">Progress:</span>
                           <span className="text-[#7F3D59] font-mono">{item.progress}%</span>
                         </div>
                         <div className="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
@@ -394,59 +395,50 @@ export default function CourseUserManagement({
                             style={{ width: `${item.progress}%` }}
                           ></div>
                         </div>
+                        <div className="flex items-center justify-between text-[10px] pt-0.5">
+                          <span className="font-mono font-bold text-gray-700">
+                            Quizzes: {item.passedQuizzesCount}/{item.totalCourseQuizzes}
+                          </span>
+                          {item.certificateNumber && (
+                            <span className="text-emerald-700 font-semibold inline-flex items-center gap-0.5">
+                              <Award className="w-3 h-3 text-[#D4AF37]" />
+                              <span>Cert</span>
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </td>
 
-                    {/* Course Quizzes */}
-                    <td className="px-5 py-4">
-                      <span className="font-bold text-gray-800 block font-mono">
-                        {item.passedQuizzesCount} of {item.totalCourseQuizzes} Passed
-                      </span>
-                      {item.certificateNumber ? (
-                        <span className="text-[10px] text-emerald-700 font-semibold flex items-center gap-1">
-                          <Award className="w-3 h-3 text-[#D4AF37]" />
-                          <span>Certified</span>
-                        </span>
-                      ) : (
-                        <span className="text-[10px] text-gray-400">In Progress</span>
-                      )}
-                    </td>
-
-                    {/* Enrollment Type */}
-                    <td className="px-5 py-4">
-                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#FDF8F9] text-[#7F3D59] border border-[#EAD7E0]">
-                        {item.gateway}
-                      </span>
-                    </td>
-
                     {/* Actions */}
-                    <td className="px-5 py-4 text-right space-x-1 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => setInspectStudentId(item.userId)}
-                        className="px-3 py-1 bg-[#7F3D59] hover:bg-[#5E2C41] text-white rounded-lg text-[10px] font-bold transition-all shadow-2xs"
-                      >
-                        View 360° Profile
-                      </button>
+                    <td className="px-3.5 py-3 text-right align-top">
+                      <div className="flex flex-wrap items-center justify-end gap-1">
+                        <button
+                          type="button"
+                          onClick={() => setInspectStudentId(item.userId)}
+                          className="px-2.5 py-1 bg-[#7F3D59] hover:bg-[#5E2C41] text-white rounded-lg text-[10px] font-bold transition-all shadow-2xs"
+                        >
+                          360° Profile
+                        </button>
 
-                      <button
-                        type="button"
-                        onClick={() => handleFastSetProgress(item.enrollmentId, 100)}
-                        disabled={item.progress >= 100}
-                        className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-lg text-[10px] font-bold border border-emerald-200 disabled:opacity-40"
-                        title="Mark course as 100% completed"
-                      >
-                        Set 100%
-                      </button>
+                        <button
+                          type="button"
+                          onClick={() => handleFastSetProgress(item.enrollmentId, 100)}
+                          disabled={item.progress >= 100}
+                          className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-lg text-[10px] font-bold border border-emerald-200 disabled:opacity-40"
+                          title="Mark course as 100% completed"
+                        >
+                          100%
+                        </button>
 
-                      <button
-                        type="button"
-                        onClick={() => handleFastUnenroll(item.enrollmentId, item.studentName)}
-                        className="px-2 py-1 bg-red-50 hover:bg-red-100 text-red-700 rounded-lg text-[10px] font-bold border border-red-200"
-                        title="Unenroll student from this course"
-                      >
-                        Unenroll
-                      </button>
+                        <button
+                          type="button"
+                          onClick={() => handleFastUnenroll(item.enrollmentId, item.studentName)}
+                          className="px-2 py-1 bg-red-50 hover:bg-red-100 text-red-700 rounded-lg text-[10px] font-bold border border-red-200"
+                          title="Unenroll student from this course"
+                        >
+                          Unenroll
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

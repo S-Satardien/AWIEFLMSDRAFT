@@ -35,7 +35,15 @@ import RoyaltiesTab from "./RoyaltiesTab";
 import CourseManagementTab from "./CourseManagementTab";
 import CourseUserManagement from "./CourseUserManagement";
 import StudentProfileDrawer from "./StudentProfileDrawer";
-import { resolveComment, getAdvancedQuizAnalytics, exportAllPlatformData } from "./actions";
+import CourseBuilder from "./CourseBuilder";
+import LearnDashImportModal from "./LearnDashImportModal";
+import {
+  getAdminData,
+  resolveComment,
+  getAdvancedQuizAnalytics,
+  exportAllPlatformData,
+} from "./actions";
+import { Pencil, Upload } from "@/components/Icons";
 
 interface AdminClientProps {
   initialData: any;
@@ -60,7 +68,7 @@ type CourseDetailSubTab = "CURRICULUM" | "ROSTER" | "QUIZZES";
 /**
  * AWIEF Executive Control Center & Administration Portal.
  * Features a persistent Left Sidebar with accordion dropdowns for:
- * 1. Masterclasses & Courses (Curriculum Builder, specific course workspaces, course quizzes)
+ * 1. Masterclasses & Courses (Curriculum Studio, LearnDash Import, course workspaces, course quizzes)
  * 2. Course User Management (Course-scoped rosters, 360° student dossiers, master cohort, staff accounts)
  * 3. Financials & Royalties (Author royalties, settlement statements, transaction ledger)
  * 4. Credentials & Governance (Verifiable QR certificates, surveys, item diagnostics, reviewer annotations)
@@ -69,6 +77,7 @@ type CourseDetailSubTab = "CURRICULUM" | "ROSTER" | "QUIZZES";
  * @returns {JSX.Element} The rendered administrative interface.
  */
 export default function AdminClient({ initialData }: AdminClientProps) {
+  const [adminData, setAdminData] = useState(initialData);
   const {
     students = [],
     reviewComments = [],
@@ -78,7 +87,7 @@ export default function AdminClient({ initialData }: AdminClientProps) {
     courses = [],
     transactions = [],
     role = "STUDENT"
-  } = initialData;
+  } = adminData;
 
   const [comments, setComments] = useState(reviewComments);
   const [advancedAnalytics, setAdvancedAnalytics] = useState<any>(null);
@@ -105,6 +114,9 @@ export default function AdminClient({ initialData }: AdminClientProps) {
   const [selectedCourse, setSelectedCourse] = useState<any>(courses[0] || null);
   const [courseDetailSubTab, setCourseDetailSubTab] = useState<CourseDetailSubTab>("CURRICULUM");
   const [courseQuizFilter, setCourseQuizFilter] = useState<string | null>(null);
+  const [isEditingSelectedCourse, setIsEditingSelectedCourse] = useState(false);
+  const [isCreatingCourseQuick, setIsCreatingCourseQuick] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
   // 360° Student Drawer State
   const [inspectStudentId, setInspectStudentId] = useState<string | null>(null);
@@ -118,6 +130,26 @@ export default function AdminClient({ initialData }: AdminClientProps) {
     }
   }, [role]);
 
+  const refreshAdminData = async (focusCourseId?: string) => {
+    const fresh = await getAdminData();
+    if (!fresh) return;
+    setAdminData(fresh);
+    setComments(fresh.reviewComments || []);
+    const targetId = focusCourseId || selectedCourse?.id;
+    if (targetId) {
+      const updatedSelected = (fresh.courses || []).find((c: any) => c.id === targetId);
+      if (updatedSelected) {
+        setSelectedCourse(updatedSelected);
+      } else {
+        setSelectedCourse((fresh.courses || [])[0] || null);
+        if (activeView === "COURSE_DETAIL") {
+          setIsEditingSelectedCourse(false);
+          setActiveView("COURSES_BUILDER");
+        }
+      }
+    }
+  };
+
   const handleResolve = async (id: string) => {
     await resolveComment(id);
     setComments(comments.map((c: any) => (c.id === id ? { ...c, status: "RESOLVED" } : c)));
@@ -128,6 +160,7 @@ export default function AdminClient({ initialData }: AdminClientProps) {
     const c = courses.find((item: any) => item.id === courseId);
     if (c) {
       setSelectedCourse(c);
+      setIsEditingSelectedCourse(false);
       setActiveView("COURSE_DETAIL");
       setCourseDetailSubTab("QUIZZES");
     } else {
@@ -139,6 +172,7 @@ export default function AdminClient({ initialData }: AdminClientProps) {
   // Switch to specific course workspace
   const handleSelectCourseWorkspace = (course: any) => {
     setSelectedCourse(course);
+    setIsEditingSelectedCourse(false);
     setActiveView("COURSE_DETAIL");
     setCourseDetailSubTab("CURRICULUM");
   };
@@ -260,8 +294,21 @@ export default function AdminClient({ initialData }: AdminClientProps) {
 
   return (
     <div className="space-y-6 selection:bg-[#7F3D59] selection:text-white">
-      {/* Top Header Strip with UN ECOSOC Seal & Platform Export Actions */}
-      <div className="bg-white p-6 rounded-3xl shadow-sm border border-[#EAD7E0] flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+      {isImportModalOpen && (
+        <LearnDashImportModal
+          onClose={() => setIsImportModalOpen(false)}
+          onImported={async (courseId) => {
+            setIsImportModalOpen(false);
+            await refreshAdminData(courseId);
+            setActiveView("COURSE_DETAIL");
+            setCourseDetailSubTab("CURRICULUM");
+            setIsEditingSelectedCourse(false);
+          }}
+        />
+      )}
+
+      {/* Top Header Strip with UN ECOSOC Seal & Platform Quick Actions */}
+      <div className="bg-white p-5 sm:p-6 rounded-3xl shadow-sm border border-[#EAD7E0] flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#7F3D59]/10 text-[#7F3D59] border border-[#7F3D59]/20 inline-flex items-center gap-1.5">
@@ -273,39 +320,58 @@ export default function AdminClient({ initialData }: AdminClientProps) {
             AWIEF Executive Administration
           </h1>
           <p className="text-xs text-gray-500 mt-0.5">
-            Manage commercial masterclasses, course rosters, single-student dossiers, author royalties, and credential verification.
+            Create &amp; import masterclasses, manage course rosters, track author royalties, and verify credentials.
           </p>
         </div>
 
-        {/* Global Action Export Strip */}
+        {/* Global Action Strip */}
         {role === "ADMIN" && (
-          <div className="flex flex-wrap items-center gap-2 self-start lg:self-auto shrink-0">
+          <div className="flex flex-wrap items-center gap-2 self-start xl:self-auto shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                setIsCreatingCourseQuick(true);
+                setActiveView("COURSES_BUILDER");
+              }}
+              className="px-3.5 py-2 bg-[#7F3D59] hover:bg-[#5E2C41] text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Create Course</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsImportModalOpen(true)}
+              className="px-3.5 py-2 bg-[#FDF8F9] hover:bg-[#EAD7E0]/60 text-[#7F3D59] border border-[#7F3D59]/30 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5"
+            >
+              <Upload className="w-3.5 h-3.5" />
+              <span>Import LearnDash</span>
+            </button>
             <button
               type="button"
               onClick={handleExportFullPlatformData}
               disabled={isExportingData}
-              className="px-4 py-2 bg-[#D4AF37] hover:bg-[#B89628] text-[#1D0B14] rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 font-serif"
+              className="px-3.5 py-2 bg-[#D4AF37] hover:bg-[#B89628] text-[#1D0B14] rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 font-serif"
               title="Exports complete database (courses, users, transactions, certificates, surveys) in JSON"
             >
               <Download className="w-3.5 h-3.5 text-[#1D0B14]" />
-              <span>{isExportingData ? "Exporting..." : "Export Platform Data (JSON)"}</span>
+              <span>{isExportingData ? "Exporting..." : "Export JSON"}</span>
             </button>
             <button
               type="button"
               onClick={exportStudentsCSV}
-              className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-xl text-xs font-bold transition-colors inline-flex items-center gap-1.5"
+              className="px-3.5 py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-xl text-xs font-bold transition-colors inline-flex items-center gap-1.5"
             >
               <Download className="w-3.5 h-3.5 text-gray-600" />
-              <span>Export Founders CSV</span>
+              <span>Founders CSV</span>
             </button>
           </div>
         )}
       </div>
 
       {/* Main Two-Column Layout: Left Sidebar + Workspace Content */}
-      <div className="flex flex-col lg:flex-row gap-6 items-start">
+      <div className="flex flex-col lg:flex-row gap-5 items-start">
         {/* LEFT SIDEBAR NAVIGATION WITH COLLAPSIBLE DROPDOWNS */}
-        <aside className="w-full lg:w-72 bg-white rounded-3xl border border-[#EAD7E0] p-4 shadow-sm shrink-0 space-y-4">
+        <aside className="w-full lg:w-64 lg:sticky lg:top-6 bg-white rounded-3xl border border-[#EAD7E0] p-4 shadow-sm shrink-0 space-y-4">
           <div className="px-2 pt-1 pb-2 border-b border-[#EAD7E0]/60 flex items-center justify-between">
             <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
               Admin Navigation
@@ -337,12 +403,15 @@ export default function AdminClient({ initialData }: AdminClientProps) {
                   </button>
 
                   {sidebarAccordions.courses && (
-                    <div className="pl-6 space-y-1 border-l-2 border-[#EAD7E0] ml-3.5">
+                    <div className="pl-4 space-y-1 border-l-2 border-[#EAD7E0] ml-3.5">
                       <button
                         type="button"
-                        onClick={() => setActiveView("COURSES_BUILDER")}
+                        onClick={() => {
+                          setIsCreatingCourseQuick(false);
+                          setActiveView("COURSES_BUILDER");
+                        }}
                         className={`w-full text-left px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center justify-between ${
-                          activeView === "COURSES_BUILDER"
+                          activeView === "COURSES_BUILDER" && !isCreatingCourseQuick
                             ? "bg-[#7F3D59] text-white font-bold"
                             : "text-gray-600 hover:bg-[#FDF8F9] hover:text-[#7F3D59]"
                         }`}
@@ -352,7 +421,7 @@ export default function AdminClient({ initialData }: AdminClientProps) {
                       </button>
 
                       {/* Dynamic Course Workspaces */}
-                      <div className="pt-1 pb-1 space-y-0.5">
+                      <div className="pt-1 pb-1 space-y-0.5 max-h-48 overflow-y-auto pr-1">
                         <p className="px-3 text-[10px] font-bold uppercase tracking-wider text-gray-400">
                           Course Workspaces:
                         </p>
@@ -661,6 +730,14 @@ export default function AdminClient({ initialData }: AdminClientProps) {
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setIsEditingSelectedCourse(!isEditingSelectedCourse)}
+                        className="px-4 py-2 bg-[#FDF8F9] hover:bg-[#EAD7E0]/60 text-[#7F3D59] border border-[#7F3D59]/30 text-xs font-bold rounded-xl transition-colors inline-flex items-center gap-1.5"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                        <span>{isEditingSelectedCourse ? "View Blueprint" : "Edit Course & Curriculum"}</span>
+                      </button>
                       <Link
                         href={`/course/${selectedCourse.id}`}
                         target="_blank"
@@ -671,7 +748,10 @@ export default function AdminClient({ initialData }: AdminClientProps) {
                       </Link>
                       <button
                         type="button"
-                        onClick={() => setActiveView("COURSES_BUILDER")}
+                        onClick={() => {
+                          setIsEditingSelectedCourse(false);
+                          setActiveView("COURSES_BUILDER");
+                        }}
                         className="px-3.5 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition-colors inline-flex items-center gap-1.5"
                       >
                         <Layers className="w-3.5 h-3.5" />
@@ -697,7 +777,10 @@ export default function AdminClient({ initialData }: AdminClientProps) {
 
                     <button
                       type="button"
-                      onClick={() => setCourseDetailSubTab("ROSTER")}
+                      onClick={() => {
+                        setIsEditingSelectedCourse(false);
+                        setCourseDetailSubTab("ROSTER");
+                      }}
                       className={`px-4 py-2 rounded-xl font-bold transition-all flex items-center gap-1.5 whitespace-nowrap ${
                         courseDetailSubTab === "ROSTER"
                           ? "bg-[#7F3D59] text-white shadow-xs"
@@ -710,7 +793,10 @@ export default function AdminClient({ initialData }: AdminClientProps) {
 
                     <button
                       type="button"
-                      onClick={() => setCourseDetailSubTab("QUIZZES")}
+                      onClick={() => {
+                        setIsEditingSelectedCourse(false);
+                        setCourseDetailSubTab("QUIZZES");
+                      }}
                       className={`px-4 py-2 rounded-xl font-bold transition-all flex items-center gap-1.5 whitespace-nowrap ${
                         courseDetailSubTab === "QUIZZES"
                           ? "bg-[#7F3D59] text-white shadow-xs"
@@ -723,83 +809,136 @@ export default function AdminClient({ initialData }: AdminClientProps) {
                   </div>
                 </div>
 
-                {/* Sub-Tab 1: Curriculum & Learning Objectives */}
+                {/* Sub-Tab 1: Curriculum & Learning Objectives (or Inline CourseBuilder) */}
                 {courseDetailSubTab === "CURRICULUM" && (
                   <div className="space-y-4">
-                    <div className="bg-white p-6 rounded-3xl border border-[#EAD7E0] shadow-sm">
-                      <h3 className="font-serif font-bold text-gray-900 text-base mb-1">
-                        Course Pedagogical Blueprint &amp; Syllabus
-                      </h3>
-                      <p className="text-xs text-gray-500 mb-6">
-                        Each bite-sized module is designed for 20-30 minute completion, paired with pan-African case studies and practical templates.
-                      </p>
-
-                      {selectedCourseModules.length === 0 ? (
-                        <div className="p-8 text-center text-gray-500 bg-[#FDF8F9] rounded-2xl border border-[#EAD7E0] text-xs">
-                          No native modules defined for this masterclass yet.
+                    {isEditingSelectedCourse ? (
+                      <CourseBuilder
+                        key={selectedCourse.id}
+                        course={selectedCourse}
+                        onCancel={() => setIsEditingSelectedCourse(false)}
+                        onSaved={async (savedId) => {
+                          setIsEditingSelectedCourse(false);
+                          await refreshAdminData(savedId);
+                        }}
+                      />
+                    ) : (
+                      <div className="bg-white p-6 rounded-3xl border border-[#EAD7E0] shadow-sm">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+                          <div>
+                            <h3 className="font-serif font-bold text-gray-900 text-base mb-1">
+                              Course Pedagogical Blueprint &amp; Syllabus
+                            </h3>
+                            <p className="text-xs text-gray-500">
+                              Each bite-sized module is designed for 20-30 minute completion, paired with pan-African case studies and practical templates.
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setIsEditingSelectedCourse(true)}
+                            className="px-4 py-2 bg-[#7F3D59] hover:bg-[#5E2C41] text-white text-xs font-bold rounded-xl inline-flex items-center gap-1.5 self-start shrink-0"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                            <span>Edit Modules &amp; Quizzes</span>
+                          </button>
                         </div>
-                      ) : (
-                        <div className="space-y-4">
-                          {selectedCourseModules.map((mod: any, index: number) => (
-                            <div
-                              key={mod.id || index}
-                              className="p-5 rounded-2xl border border-[#EAD7E0] bg-[#FDF8F9]/50 hover:bg-[#FDF8F9] transition-colors space-y-3"
+
+                        {selectedCourseModules.length === 0 ? (
+                          <div className="p-8 text-center text-gray-500 bg-[#FDF8F9] rounded-2xl border border-[#EAD7E0] text-xs space-y-3">
+                            <p>No native modules defined for this masterclass yet.</p>
+                            <button
+                              type="button"
+                              onClick={() => setIsEditingSelectedCourse(true)}
+                              className="px-4 py-2 bg-[#7F3D59] text-white rounded-xl font-bold"
                             >
-                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                                <div>
-                                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#7F3D59]">
-                                    Module {index + 1}
-                                  </span>
-                                  <h4 className="font-serif font-bold text-gray-900 text-sm">
-                                    {mod.title}
-                                  </h4>
+                              Open Course Builder to Add Modules
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="space-y-4">
+                            {selectedCourseModules.map((mod: any, index: number) => (
+                              <div
+                                key={mod.id || index}
+                                className="p-5 rounded-2xl border border-[#EAD7E0] bg-[#FDF8F9]/50 hover:bg-[#FDF8F9] transition-colors space-y-3"
+                              >
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                  <div>
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-[#7F3D59]">
+                                      Module {index + 1}
+                                    </span>
+                                    <h4 className="font-serif font-bold text-gray-900 text-sm">
+                                      {mod.title}
+                                    </h4>
+                                  </div>
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    {mod.quizId && (
+                                      <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-lg">
+                                        Quiz Linked
+                                      </span>
+                                    )}
+                                    <span className="text-xs font-mono font-bold text-gray-500 bg-white px-2.5 py-1 rounded-lg border border-gray-200">
+                                      {mod.duration || "25 mins"}
+                                    </span>
+                                  </div>
                                 </div>
-                                <span className="text-xs font-mono font-bold text-gray-500 bg-white px-2.5 py-1 rounded-lg border border-gray-200 shrink-0">
-                                  {mod.duration || "25 mins"}
-                                </span>
+
+                                <p className="text-xs text-gray-600 leading-relaxed">
+                                  {mod.summary}
+                                </p>
+
+                                {mod.topics && Array.isArray(mod.topics) && mod.topics.length > 0 && (
+                                  <div className="bg-white p-3.5 rounded-xl border border-gray-200 text-xs space-y-1">
+                                    <strong className="text-gray-900 block text-[11px] uppercase tracking-wider">
+                                      Sub-Lessons / Topics ({mod.topics.length}):
+                                    </strong>
+                                    <ul className="list-disc list-inside text-gray-600 space-y-0.5">
+                                      {mod.topics.map((t: any, tIdx: number) => (
+                                        <li key={t.id || tIdx}>
+                                          {typeof t === "string" ? t : t.title}
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                )}
+
+                                {mod.caseStudy && (
+                                  <div className="bg-white p-3.5 rounded-xl border border-gray-200 text-xs">
+                                    <strong className="text-gray-900 block font-serif mb-1">
+                                      Pan-African Enterprise Case Study:
+                                    </strong>
+                                    <p className="text-gray-600 italic">
+                                      {typeof mod.caseStudy === "string"
+                                        ? mod.caseStudy
+                                        : mod.caseStudy.summary || mod.caseStudy.title}
+                                    </p>
+                                  </div>
+                                )}
+
+                                {mod.keyTakeaways && mod.keyTakeaways.length > 0 && (
+                                  <div className="space-y-1.5 text-xs">
+                                    <strong className="text-gray-700 block text-[11px] uppercase tracking-wider">
+                                      Learning Objectives &amp; Core Takeaways:
+                                    </strong>
+                                    <ul className="list-disc list-inside space-y-1 text-gray-600 pl-1">
+                                      {mod.keyTakeaways.map((takeaway: string, tIdx: number) => (
+                                        <li key={tIdx}>{takeaway}</li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                )}
+
+                                {mod.templateName && (
+                                  <div className="flex items-center gap-2 text-xs font-medium text-[#7F3D59] bg-[#7F3D59]/10 px-3 py-2 rounded-xl">
+                                    <Download className="w-3.5 h-3.5 text-[#7F3D59]" />
+                                    <span>Downloadable Toolkit Template: {mod.templateName}</span>
+                                  </div>
+                                )}
                               </div>
-
-                              <p className="text-xs text-gray-600 leading-relaxed">
-                                {mod.summary}
-                              </p>
-
-                              {mod.caseStudy && (
-                                <div className="bg-white p-3.5 rounded-xl border border-gray-200 text-xs">
-                                  <strong className="text-gray-900 block font-serif mb-1">
-                                    Pan-African Enterprise Case Study:
-                                  </strong>
-                                  <p className="text-gray-600 italic">
-                                    {typeof mod.caseStudy === "string"
-                                      ? mod.caseStudy
-                                      : mod.caseStudy.summary || mod.caseStudy.title}
-                                  </p>
-                                </div>
-                              )}
-
-                              {mod.keyTakeaways && mod.keyTakeaways.length > 0 && (
-                                <div className="space-y-1.5 text-xs">
-                                  <strong className="text-gray-700 block text-[11px] uppercase tracking-wider">
-                                    Learning Objectives &amp; Core Takeaways:
-                                  </strong>
-                                  <ul className="list-disc list-inside space-y-1 text-gray-600 pl-1">
-                                    {mod.keyTakeaways.map((takeaway: string, tIdx: number) => (
-                                      <li key={tIdx}>{takeaway}</li>
-                                    ))}
-                                  </ul>
-                                </div>
-                              )}
-
-                              {mod.templateName && (
-                                <div className="flex items-center gap-2 text-xs font-medium text-[#7F3D59] bg-[#7F3D59]/10 px-3 py-2 rounded-xl">
-                                  <Download className="w-3.5 h-3.5 text-[#7F3D59]" />
-                                  <span>Downloadable Toolkit Template: {mod.templateName}</span>
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -810,7 +949,7 @@ export default function AdminClient({ initialData }: AdminClientProps) {
                       initialCourseId={selectedCourse.id}
                       allCourses={courses}
                       allUsers={students}
-                      onRefreshParent={() => window.location.reload()}
+                      onRefreshParent={() => refreshAdminData()}
                     />
                   </div>
                 )}
@@ -840,7 +979,7 @@ export default function AdminClient({ initialData }: AdminClientProps) {
                   initialCourseId="ALL"
                   allCourses={courses}
                   allUsers={students}
-                  onRefreshParent={() => window.location.reload()}
+                  onRefreshParent={() => refreshAdminData()}
                 />
               </motion.div>
             )}
@@ -853,12 +992,28 @@ export default function AdminClient({ initialData }: AdminClientProps) {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
               >
-                <CourseManagementTab
-                  courses={courses}
-                  onRefresh={() => window.location.reload()}
-                  onManageCourseQuizzes={handleOpenCourseQuizzes}
-                  onSelectCourse={handleSelectCourseWorkspace}
-                />
+                {isCreatingCourseQuick ? (
+                  <CourseBuilder
+                    course={null}
+                    onCancel={() => setIsCreatingCourseQuick(false)}
+                    onSaved={async (savedId) => {
+                      setIsCreatingCourseQuick(false);
+                      await refreshAdminData(savedId);
+                      setActiveView("COURSE_DETAIL");
+                      setCourseDetailSubTab("CURRICULUM");
+                    }}
+                  />
+                ) : (
+                  <CourseManagementTab
+                    courses={courses}
+                    onRefresh={() => refreshAdminData()}
+                    onManageCourseQuizzes={handleOpenCourseQuizzes}
+                    onSelectCourse={handleSelectCourseWorkspace}
+                    onCourseCreatedOrImported={async (courseId) => {
+                      await refreshAdminData(courseId);
+                    }}
+                  />
+                )}
               </motion.div>
             )}
 
@@ -885,7 +1040,11 @@ export default function AdminClient({ initialData }: AdminClientProps) {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
               >
-                <RoyaltiesTab transactions={transactions} courses={courses} />
+                <RoyaltiesTab
+                  transactions={transactions}
+                  courses={courses}
+                  initialSection={activeView === "TRANSACTIONS" ? "LEDGER" : "ROYALTIES"}
+                />
               </motion.div>
             )}
 
@@ -978,25 +1137,25 @@ export default function AdminClient({ initialData }: AdminClientProps) {
                   </div>
 
                   <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200 text-xs">
-                      <thead className="bg-[#FDF8F9] text-[11px] font-bold uppercase tracking-wider text-gray-500">
+                    <table className="w-full divide-y divide-gray-200 text-xs">
+                      <thead className="bg-[#FDF8F9] text-[10px] font-bold uppercase tracking-wider text-gray-500">
                         <tr>
-                          <th scope="col" className="px-6 py-3 text-left">
+                          <th scope="col" className="px-3.5 py-3 text-left">
                             Founder &amp; Venture
                           </th>
-                          <th scope="col" className="px-6 py-3 text-left">
+                          <th scope="col" className="px-2.5 py-3 text-left">
                             Location
                           </th>
-                          <th scope="col" className="px-6 py-3 text-left">
+                          <th scope="col" className="px-3 py-3 text-left">
                             Sector &amp; Stage
                           </th>
-                          <th scope="col" className="px-6 py-3 text-left">
+                          <th scope="col" className="px-3 py-3 text-left">
                             AWIEF Program
                           </th>
-                          <th scope="col" className="px-6 py-3 text-center">
+                          <th scope="col" className="px-2.5 py-3 text-center">
                             Progress
                           </th>
-                          <th scope="col" className="px-6 py-3 text-left">
+                          <th scope="col" className="px-3 py-3 text-right">
                             Last Active
                           </th>
                         </tr>
@@ -1008,37 +1167,37 @@ export default function AdminClient({ initialData }: AdminClientProps) {
                             onClick={() => setInspectStudentId(student.id)}
                             className="hover:bg-gray-50 cursor-pointer transition-colors"
                           >
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="flex items-center">
-                                <div className="flex-shrink-0 h-9 w-9 bg-[#7F3D59] text-white rounded-full flex items-center justify-center font-bold text-xs">
+                            <td className="px-3.5 py-3 align-top">
+                              <div className="flex items-start gap-2.5">
+                                <div className="flex-shrink-0 h-8 w-8 bg-[#7F3D59] text-white rounded-full flex items-center justify-center font-bold text-xs mt-0.5">
                                   {student.name ? student.name[0].toUpperCase() : "S"}
                                 </div>
-                                <div className="ml-3">
+                                <div className="min-w-0">
                                   <div className="font-bold text-gray-900 hover:text-[#7F3D59] flex items-center gap-1">
                                     <span>{student.name || "Anonymous Founder"}</span>
-                                    <Eye className="w-3 h-3 text-gray-400" />
+                                    <Eye className="w-3 h-3 text-gray-400 shrink-0" />
                                   </div>
-                                  <div className="text-[11px] text-gray-500">
+                                  <div className="text-[11px] text-gray-500 break-all">
                                     {student.organization || student.email}
                                   </div>
                                 </div>
                               </div>
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
+                            <td className="px-2.5 py-3 align-top">
                               <div className="flex items-center gap-1.5">
                                 {student.country && (
                                   <img
                                     src={`https://flagcdn.com/w40/${student.country.toLowerCase()}.png`}
                                     alt={student.country}
-                                    className="w-4 h-auto rounded-[2px]"
+                                    className="w-4 h-auto rounded-[2px] shrink-0"
                                   />
                                 )}
                                 <span className="font-medium text-gray-700">
-                                  {student.country || "Pan-Africa"}
+                                  {student.country || "Africa"}
                                 </span>
                               </div>
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
+                            <td className="px-3 py-3 align-top">
                               <p className="font-medium text-gray-800">
                                 {student.sector || "Agribusiness"}
                               </p>
@@ -1046,12 +1205,12 @@ export default function AdminClient({ initialData }: AdminClientProps) {
                                 {student.businessStage || "Growth Stage"}
                               </p>
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#7F3D59]/10 text-[#7F3D59]">
+                            <td className="px-3 py-3 align-top">
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#7F3D59]/10 text-[#7F3D59] inline-block">
                                 {student.awiefProgram || "Growth Accelerator"}
                               </span>
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-center">
+                            <td className="px-2.5 py-3 text-center align-top">
                               <span
                                 className={`px-2 py-0.5 inline-flex text-xs leading-5 font-bold rounded-full ${
                                   student.scormProgress >= 100
@@ -1062,7 +1221,7 @@ export default function AdminClient({ initialData }: AdminClientProps) {
                                 {student.scormProgress}%
                               </span>
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-xs text-gray-500">
+                            <td className="px-3 py-3 text-right text-xs text-gray-500 align-top">
                               {student.lastActiveDate
                                 ? new Date(student.lastActiveDate).toLocaleDateString()
                                 : "Never"}
@@ -1112,38 +1271,38 @@ export default function AdminClient({ initialData }: AdminClientProps) {
                 </div>
 
                 <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200 text-xs">
-                    <thead className="bg-[#FDF8F9] text-[11px] font-bold uppercase tracking-wider text-gray-500">
+                  <table className="w-full divide-y divide-gray-200 text-xs">
+                    <thead className="bg-[#FDF8F9] text-[10px] font-bold uppercase tracking-wider text-gray-500">
                       <tr>
-                        <th className="px-6 py-3 text-left">Founder Recipient</th>
-                        <th className="px-6 py-3 text-left">Masterclass</th>
-                        <th className="px-6 py-3 text-left">Certificate ID</th>
-                        <th className="px-6 py-3 text-left">Issue Date</th>
-                        <th className="px-6 py-3 text-right">Verification</th>
+                        <th className="px-3.5 py-3 text-left">Founder Recipient</th>
+                        <th className="px-3 py-3 text-left">Masterclass</th>
+                        <th className="px-3 py-3 text-left">Certificate ID</th>
+                        <th className="px-3 py-3 text-left">Issue Date</th>
+                        <th className="px-3.5 py-3 text-right">Verification</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 bg-white">
                       {certificates.map((c: any) => (
                         <tr key={c.id} className="hover:bg-gray-50">
-                          <td className="px-6 py-4 whitespace-nowrap font-bold text-gray-900">
+                          <td className="px-3.5 py-3 font-bold text-gray-900 align-top">
                             {c.recipientName}
                           </td>
-                          <td className="px-6 py-4 text-gray-700 max-w-xs truncate">
-                            {c.courseTitle}
+                          <td className="px-3 py-3 text-gray-700 align-top">
+                            <span className="line-clamp-2 max-w-[260px]">{c.courseTitle}</span>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap font-mono text-xs font-bold text-[#7F3D59]">
+                          <td className="px-3 py-3 font-mono text-[11px] font-bold text-[#7F3D59] align-top break-all">
                             {c.certificateNumber}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-gray-500 text-xs">
+                          <td className="px-3 py-3 text-gray-500 text-xs align-top">
                             {new Date(c.issuedAt).toLocaleDateString()}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-right text-xs">
+                          <td className="px-3.5 py-3 text-right text-xs align-top">
                             <Link
                               href={`/verify/${c.certificateNumber}`}
                               target="_blank"
                               className="text-[#7F3D59] hover:underline font-bold inline-flex items-center gap-1"
                             >
-                              <span>Verify Link</span>
+                              <span>Verify</span>
                               <ExternalLink className="w-3 h-3" />
                             </Link>
                           </td>
@@ -1389,7 +1548,7 @@ export default function AdminClient({ initialData }: AdminClientProps) {
           userId={inspectStudentId}
           allCourses={courses}
           onClose={() => setInspectStudentId(null)}
-          onRefreshParent={() => window.location.reload()}
+          onRefreshParent={() => refreshAdminData()}
         />
       )}
     </div>

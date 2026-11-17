@@ -178,48 +178,48 @@ export default function UserManagementTab() {
         )}
 
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-100 text-xs">
-            <thead className="bg-[#FDF8F9] text-[11px] font-bold uppercase tracking-wider text-gray-500">
+          <table className="w-full divide-y divide-gray-100 text-xs">
+            <thead className="bg-[#FDF8F9] text-[10px] font-bold uppercase tracking-wider text-gray-500">
               <tr>
-                <th className="px-6 py-3 text-left">User Profile</th>
-                <th className="px-6 py-3 text-left">Role Permission</th>
-                <th className="px-6 py-3 text-left">Last Active</th>
-                <th className="px-6 py-3 text-right">Actions</th>
+                <th className="px-4 py-3 text-left">User Profile</th>
+                <th className="px-3 py-3 text-left">Role Permission</th>
+                <th className="px-3 py-3 text-left">Last Active</th>
+                <th className="px-4 py-3 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-100">
               {users.map((user: any) => (
                 <tr key={user.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-4 py-3">
                     <div className="flex items-center">
-                      <div className="flex-shrink-0 h-9 w-9 bg-[#7F3D59] text-white rounded-full flex items-center justify-center font-bold text-xs">
+                      <div className="flex-shrink-0 h-8 w-8 bg-[#7F3D59] text-white rounded-full flex items-center justify-center font-bold text-xs">
                         {user.name ? user.name[0].toUpperCase() : "U"}
                       </div>
-                      <div className="ml-3">
+                      <div className="ml-3 min-w-0">
                         <div className="font-bold text-gray-900">{user.name || "Anonymous User"}</div>
-                        <div className="text-[11px] text-gray-500">{user.email}</div>
+                        <div className="text-[11px] text-gray-500 break-all">{user.email}</div>
                       </div>
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-3 py-3">
                     <select
                       value={user.role}
                       onChange={(e) => handleRoleChange(user.id, e.target.value)}
-                      className="text-xs font-semibold border-gray-300 rounded-lg shadow-xs focus:ring-[#7F3D59] focus:border-[#7F3D59] py-1 px-2.5 bg-[#FDF8F9]"
+                      className="text-xs font-semibold border-gray-300 rounded-lg shadow-xs focus:ring-[#7F3D59] focus:border-[#7F3D59] py-1 px-2 bg-[#FDF8F9]"
                     >
                       <option value="STUDENT">Student / Founder</option>
                       <option value="REVIEWER">Faculty Reviewer</option>
                       <option value="ADMIN">Executive Admin</option>
                     </select>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-xs text-gray-500">
+                  <td className="px-3 py-3 text-xs text-gray-500">
                     {user.lastActiveDate ? new Date(user.lastActiveDate).toLocaleDateString() : "Never"}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-xs">
+                  <td className="px-4 py-3 text-right text-xs">
                     <button
                       type="button"
                       onClick={() => handleResetPassword(user.id)}
-                      className="text-red-700 hover:text-red-900 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-lg font-bold transition-colors inline-flex items-center gap-1"
+                      className="text-red-700 hover:text-red-900 bg-red-50 hover:bg-red-100 px-2.5 py-1.5 rounded-lg font-bold transition-colors inline-flex items-center gap-1"
                     >
                       <Lock className="w-3 h-3" />
                       <span>Reset Password</span>

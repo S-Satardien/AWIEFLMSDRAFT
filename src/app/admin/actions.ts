@@ -6,6 +6,19 @@ import { authOptions } from "@/lib/auth";
 import fs from "fs";
 import path from "path";
 import bcrypt from "bcryptjs";
+import {
+  parseLearnDashWxrXml,
+  parseLearnDashJson,
+  parseLearnDashZip,
+  getSampleLearnDashXml,
+  type ParsedLearnDashCourse,
+} from "@/lib/learndashImporter";
+import {
+  isScormManifestXml,
+  parseScormPackageBuffer,
+  getSampleScormManifestXml,
+} from "@/lib/scormImporter";
+import { extractZipEntries } from "@/lib/zipUtils";
 
 /**
  * Fetches comprehensive administrative data including learners, courses,
@@ -219,10 +232,188 @@ export async function resolveComment(commentId: string) {
   return true;
 }
 
-// --- SELF-SERVICE COURSE MANAGEMENT ACTIONS ---
+// --- SELF-SERVICE COURSE MANAGEMENT & LEARNDASH IMPORT ACTIONS ---
+
+export interface InlineQuizInput {
+  quizKey?: string;
+  moduleIndex?: number;
+  name: string;
+  intro?: string;
+  questions: {
+    id?: number;
+    name?: string;
+    questiontext: string;
+    answers: {
+      id?: number;
+      text: string;
+      isCorrect: boolean;
+    }[];
+  }[];
+}
+
+/**
+ * Generates a unique URL-friendly slug for a course record.
+ */
+async function ensureUniqueCourseSlug(baseSlug: string, excludeCourseId?: string): Promise<string> {
+  const cleanBase =
+    baseSlug
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 64) || `course-${Date.now()}`;
+
+  let candidate = cleanBase;
+  let counter = 2;
+  while (true) {
+    const existing = await prisma.course.findUnique({ where: { slug: candidate } });
+    if (!existing || existing.id === excludeCourseId) {
+      return candidate;
+    }
+    candidate = `${cleanBase}-${counter++}`;
+  }
+}
+
+/**
+ * Syncs an array of quizzes into the Quiz table for a given course and returns quizKey mapping.
+ */
+async function syncInlineQuizzesForCourse(
+  courseId: string,
+  quizzes: InlineQuizInput[]
+): Promise<Record<number, string>> {
+  const existingQuizzes = await prisma.quiz.findMany();
+  let maxKey = existingQuizzes.reduce((max, q) => {
+    const num = parseInt(q.quizKey, 10);
+    return !isNaN(num) && num > max ? num : max;
+  }, 0);
+
+  let maxQuestionId = 100;
+  let maxAnswerId = 1000;
+  existingQuizzes.forEach((q) => {
+    try {
+      const qs = JSON.parse(q.questionsJson);
+      if (Array.isArray(qs)) {
+        qs.forEach((qu: any) => {
+          if (qu.id && qu.id > maxQuestionId) maxQuestionId = qu.id;
+          if (Array.isArray(qu.answers)) {
+            qu.answers.forEach((a: any) => {
+              if (a.id && a.id > maxAnswerId) maxAnswerId = a.id;
+            });
+          }
+        });
+      }
+    } catch {
+      // ignore malformed JSON
+    }
+  });
+
+  const moduleToQuizKey: Record<number, string> = {};
+
+  for (let i = 0; i < quizzes.length; i++) {
+    const q = quizzes[i];
+    if (!q.name?.trim()) continue;
+
+    const quizKey = q.quizKey && q.quizKey.trim() ? q.quizKey.trim() : String(++maxKey);
+    const formattedQuestions = (q.questions || []).map((qu, qIdx) => {
+      const qId = qu.id && qu.id > 0 ? qu.id : ++maxQuestionId;
+      const trimmedPrompt = qu.questiontext.trim();
+      const promptHtml =
+        trimmedPrompt.startsWith("<p>") && trimmedPrompt.endsWith("</p>")
+          ? trimmedPrompt
+          : `<p>${trimmedPrompt}</p>`;
+
+      return {
+        id: qId,
+        qtype: "multichoice",
+        name: qu.name?.trim() || `Question ${qIdx + 1}`,
+        questiontext: promptHtml,
+        answers: (qu.answers || []).map((ans) => ({
+          id: ans.id && ans.id > 0 ? ans.id : ++maxAnswerId,
+          text: ans.text.trim(),
+          isCorrect: Boolean(ans.isCorrect),
+        })),
+      };
+    });
+
+    await prisma.quiz.upsert({
+      where: { quizKey },
+      update: {
+        courseId,
+        name: q.name.trim(),
+        intro: (q.intro || "").trim(),
+        questionsJson: JSON.stringify(formattedQuestions),
+      },
+      create: {
+        quizKey,
+        courseId,
+        name: q.name.trim(),
+        intro: (q.intro || "").trim(),
+        questionsJson: JSON.stringify(formattedQuestions),
+      },
+    });
+
+    if (typeof q.moduleIndex === "number") {
+      moduleToQuizKey[q.moduleIndex] = quizKey;
+    }
+  }
+
+  return moduleToQuizKey;
+}
+
+/**
+ * Fetches quizzes belonging to a specific course for the Course Builder editor.
+ *
+ * @param {string} courseId - Target course ID.
+ * @returns {Promise<InlineQuizInput[]>} Quizzes attached to this course.
+ */
+export async function getCourseQuizzesAdmin(courseId: string): Promise<InlineQuizInput[]> {
+  const session = await getServerSession(authOptions);
+  if (!session?.user || !["ADMIN", "REVIEWER"].includes((session.user as any).role)) {
+    return [];
+  }
+
+  const rows = await prisma.quiz.findMany({
+    where: { courseId },
+    orderBy: { id: "asc" },
+  });
+
+  return rows.map((r) => {
+    let questions: any[] = [];
+    try {
+      questions = JSON.parse(r.questionsJson);
+    } catch {
+      questions = [];
+    }
+    return {
+      quizKey: r.quizKey,
+      name: r.name,
+      intro: r.intro,
+      questions: questions.map((q: any) => ({
+        id: q.id,
+        name: q.name,
+        questiontext: String(q.questiontext || "").replace(/<[^>]+>/g, "").trim(),
+        answers: Array.isArray(q.answers)
+          ? q.answers.map((a: any) => ({
+              id: a.id,
+              text: String(a.text || "").replace(/<[^>]+>/g, "").trim(),
+              isCorrect: Boolean(a.isCorrect),
+            }))
+          : [],
+      })),
+    };
+  });
+}
+
+/**
+ * Creates or updates a commercial masterclass / course, including its full curriculum modules,
+ * learning objectives, thumbnail, delivery mode, and embedded module quizzes.
+ *
+ * @param {object} courseData - Full course configuration and curriculum payload.
+ * @returns {Promise<{ success: boolean; courseId?: string; error?: string }>}
+ */
 export async function saveAdminCourse(courseData: {
   id: string;
   title: string;
+  slug?: string;
   category?: string;
   duration?: string;
   priceZar: number;
@@ -235,8 +426,16 @@ export async function saveAdminCourse(courseData: {
   royaltyRate?: number;
   shortDescription?: string;
   description?: string;
+  targetAudience?: string;
+  thumbnailUrl?: string;
+  learningObjectives?: string;
+  modulesJson?: string;
+  scormPath?: string;
+  learndashSourceId?: string;
   isNative: boolean;
   isPublished: boolean;
+  inlineQuizzes?: InlineQuizInput[];
+  detachedQuizKeys?: string[];
 }) {
   const session = await getServerSession(authOptions);
   if (!session?.user || (session.user as any).role !== "ADMIN") {
@@ -244,10 +443,63 @@ export async function saveAdminCourse(courseData: {
   }
 
   try {
+    const idPrefix =
+      (courseData.title || "course")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .slice(0, 48) || "course";
+    const cleanId =
+      courseData.id?.trim() ||
+      `${idPrefix}-${Date.now().toString().slice(-4)}`;
+
+    const uniqueSlug = await ensureUniqueCourseSlug(
+      courseData.slug || courseData.title || cleanId,
+      cleanId
+    );
+
+    // Delete quizzes explicitly detached in CourseBuilder (unless re-attached in inlineQuizzes)
+    if (courseData.detachedQuizKeys && courseData.detachedQuizKeys.length > 0) {
+      const activeKeys = new Set(
+        (courseData.inlineQuizzes || []).map((q) => q.quizKey).filter(Boolean)
+      );
+      const keysToDelete = courseData.detachedQuizKeys.filter((k) => k && !activeKeys.has(k));
+      if (keysToDelete.length > 0) {
+        await prisma.quiz.deleteMany({
+          where: {
+            courseId: cleanId,
+            quizKey: { in: keysToDelete },
+          },
+        });
+      }
+    }
+
+    // Sync any inline module quizzes first so we can bind module.quizId accurately
+    let finalModulesJson = courseData.modulesJson;
+    if (courseData.inlineQuizzes && courseData.inlineQuizzes.length > 0) {
+      const moduleToQuizKey = await syncInlineQuizzesForCourse(cleanId, courseData.inlineQuizzes);
+      if (finalModulesJson) {
+        try {
+          const parsedMods = JSON.parse(finalModulesJson);
+          if (Array.isArray(parsedMods)) {
+            parsedMods.forEach((m: any, idx: number) => {
+              if (moduleToQuizKey[idx]) {
+                m.quizId = moduleToQuizKey[idx];
+              }
+            });
+            finalModulesJson = JSON.stringify(parsedMods);
+          }
+        } catch {
+          // keep original modulesJson
+        }
+      }
+    }
+
     await prisma.course.upsert({
-      where: { id: courseData.id },
+      where: { id: cleanId },
       update: {
         title: courseData.title,
+        slug: uniqueSlug,
         category: courseData.category,
         duration: courseData.duration,
         priceZar: courseData.priceZar,
@@ -262,12 +514,19 @@ export async function saveAdminCourse(courseData: {
         royaltyRate: courseData.royaltyRate,
         shortDescription: courseData.shortDescription,
         description: courseData.description,
+        targetAudience: courseData.targetAudience,
+        thumbnailUrl: courseData.thumbnailUrl,
+        learningObjectives: courseData.learningObjectives,
+        modulesJson: finalModulesJson,
+        scormPath: courseData.scormPath,
+        learndashSourceId: courseData.learndashSourceId,
         isNative: courseData.isNative,
         isPublished: courseData.isPublished,
       },
       create: {
-        id: courseData.id,
+        id: cleanId,
         title: courseData.title,
+        slug: uniqueSlug,
         category: courseData.category || "Masterclass",
         duration: courseData.duration || "2.5 Hours",
         priceZar: courseData.priceZar,
@@ -279,18 +538,242 @@ export async function saveAdminCourse(courseData: {
         authorBio: courseData.authorBio,
         instructor: courseData.authorName || "AWIEF Faculty",
         instructorRole: courseData.authorRole || "Practitioner",
-        royaltyRate: courseData.royaltyRate || 35,
+        royaltyRate: courseData.royaltyRate ?? 35,
         shortDescription: courseData.shortDescription,
         description: courseData.description,
+        targetAudience: courseData.targetAudience,
+        thumbnailUrl: courseData.thumbnailUrl || "/images/investment-readiness.png",
+        learningObjectives: courseData.learningObjectives,
+        modulesJson: finalModulesJson,
+        scormPath: courseData.scormPath,
+        learndashSourceId: courseData.learndashSourceId,
         isNative: courseData.isNative,
         isPublished: courseData.isPublished,
-      }
+      },
     });
 
-    return { success: true };
+    return { success: true, courseId: cleanId };
   } catch (err: any) {
     console.error("Error saving course:", err);
     return { success: false, error: err.message || "Failed to save course." };
+  }
+}
+
+/**
+ * Parses an uploaded LearnDash export file (.xml, .json, or .zip) into normalized preview data.
+ *
+ * @param {object} payload - File name and base64-encoded content (or sample flag).
+ * @returns {Promise<{ success: boolean; courses?: ParsedLearnDashCourse[]; sampleXml?: string; error?: string }>}
+ */
+export async function parseLearnDashExportAction(payload: {
+  fileName?: string;
+  base64Content?: string;
+  useSample?: boolean | "learndash" | "scorm";
+}): Promise<{
+  success: boolean;
+  courses?: ParsedLearnDashCourse[];
+  sampleXml?: string;
+  error?: string;
+}> {
+  const session = await getServerSession(authOptions);
+  if (!session?.user || (session.user as any).role !== "ADMIN") {
+    return { success: false, error: "Unauthorized." };
+  }
+
+  try {
+    if (payload.useSample === "scorm") {
+      const sampleXml = getSampleScormManifestXml();
+      const courses = parseScormPackageBuffer(Buffer.from(sampleXml, "utf8"), {
+        fileName: "awief-esg-scorm-manifest.xml",
+      });
+      return { success: true, courses, sampleXml };
+    }
+
+    if (payload.useSample) {
+      const sampleXml = getSampleLearnDashXml();
+      const courses = parseLearnDashWxrXml(sampleXml);
+      return { success: true, courses, sampleXml };
+    }
+
+    if (!payload.fileName || !payload.base64Content) {
+      return { success: false, error: "No export file provided." };
+    }
+
+    const buffer = Buffer.from(payload.base64Content, "base64");
+    const lowerName = payload.fileName.toLowerCase();
+
+    if (lowerName.endsWith(".zip")) {
+      const scormEntries = extractZipEntries(buffer, {
+        filter: (name) => /imsmanifest\.xml$|tincan\.xml$/i.test(name),
+      });
+      if (scormEntries.length > 0) {
+        const pkgId = `pkg-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+        const extractDir = path.join(process.cwd(), "public", "uploads", "scorm", pkgId);
+        const courses = parseScormPackageBuffer(buffer, {
+          extractDir,
+          publicBaseUrl: `/api/uploads/scorm/${pkgId}`,
+          fileName: payload.fileName,
+        });
+        return { success: true, courses };
+      }
+
+      const courses = parseLearnDashZip(buffer);
+      return { success: true, courses };
+    }
+
+    const textContent = buffer.toString("utf8");
+    if (lowerName.endsWith(".json")) {
+      const courses = parseLearnDashJson(textContent);
+      return { success: true, courses };
+    }
+
+    if (isScormManifestXml(textContent)) {
+      const courses = parseScormPackageBuffer(buffer, { fileName: payload.fileName });
+      return { success: true, courses };
+    }
+
+    if (lowerName.endsWith(".xml") || textContent.trim().startsWith("<")) {
+      const courses = parseLearnDashWxrXml(textContent);
+      return { success: true, courses };
+    }
+
+    return {
+      success: false,
+      error: "Unsupported file type. Please upload a LearnDash (.xml, .json, .zip) or SCORM (.zip, imsmanifest.xml) export.",
+    };
+  } catch (err: any) {
+    console.error("Course package parse error:", err);
+    return {
+      success: false,
+      error: err.message || "Could not parse the uploaded course package.",
+    };
+  }
+}
+
+/**
+ * Imports a previewed LearnDash course (along with its modules, learning objectives, and quizzes)
+ * directly into the AWIEF LMS database.
+ *
+ * @param {ParsedLearnDashCourse} course - Reviewed course structure from LearnDash import wizard.
+ * @param {object} options - Override pricing, author, and publish settings.
+ * @returns {Promise<{ success: boolean; courseId?: string; quizCount?: number; error?: string }>}
+ */
+export async function importLearnDashCourseAction(
+  course: ParsedLearnDashCourse,
+  options: {
+    title: string;
+    category: string;
+    authorName: string;
+    authorRole: string;
+    authorEmail?: string;
+    isFree: boolean;
+    priceZar: number;
+    priceUsd: number;
+    royaltyRate: number;
+    isPublished: boolean;
+  }
+): Promise<{ success: boolean; courseId?: string; quizCount?: number; error?: string }> {
+  const session = await getServerSession(authOptions);
+  if (!session?.user || (session.user as any).role !== "ADMIN") {
+    return { success: false, error: "Unauthorized." };
+  }
+
+  try {
+    const baseId =
+      (options.title || course.slug || "imported-course")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .slice(0, 44) || "imported-course";
+
+    // Ensure course ID does not overwrite an existing unrelated course
+    let courseId = baseId;
+    const existingById = await prisma.course.findUnique({ where: { id: courseId } });
+    if (existingById) {
+      courseId = `${baseId}-${Date.now().toString().slice(-4)}`;
+    }
+
+    const uniqueSlug = await ensureUniqueCourseSlug(course.slug || options.title || courseId, courseId);
+
+    // Prepare inline quizzes & map them to modules
+    const inlineQuizzes: InlineQuizInput[] = (course.quizzes || []).map((q, qIdx) => {
+      const attachedModIdx = course.modules.findIndex(
+        (m) => m.attachedQuizIndex === qIdx
+      );
+      return {
+        moduleIndex: attachedModIdx >= 0 ? attachedModIdx : undefined,
+        name: q.name,
+        intro: q.intro,
+        questions: q.questions.map((qu, qIdx) => ({
+          name: qu.name || `Question ${qIdx + 1}`,
+          questiontext: qu.questiontext,
+          answers: qu.answers,
+        })),
+      };
+    });
+
+    const modulesPayload = course.modules.map((m) => ({
+      id: m.id,
+      title: m.title,
+      duration: m.duration,
+      summary: m.summary,
+      videoUrl: m.videoUrl,
+      caseStudy: m.caseStudy,
+      keyTakeaways: m.keyTakeaways,
+      templateName: m.templateName,
+      templateUrl: m.templateUrl,
+      topics: m.topics,
+    }));
+
+    let finalModulesJson = JSON.stringify(modulesPayload);
+    let syncedQuizCount = 0;
+
+    if (inlineQuizzes.length > 0) {
+      const moduleToQuizKey = await syncInlineQuizzesForCourse(courseId, inlineQuizzes);
+      syncedQuizCount = inlineQuizzes.length;
+
+      const parsedMods = JSON.parse(finalModulesJson);
+      parsedMods.forEach((m: any, idx: number) => {
+        if (moduleToQuizKey[idx]) {
+          m.quizId = moduleToQuizKey[idx];
+        }
+      });
+      finalModulesJson = JSON.stringify(parsedMods);
+    }
+
+    await prisma.course.create({
+      data: {
+        id: courseId,
+        title: options.title.trim() || course.title,
+        slug: uniqueSlug,
+        category: options.category.trim() || course.category || "Masterclass",
+        duration: course.duration || `${course.modules.length} Modules`,
+        shortDescription: course.shortDescription,
+        description: course.description,
+        targetAudience: course.targetAudience,
+        thumbnailUrl: course.thumbnailUrl || "/images/investment-readiness.png",
+        learningObjectives: JSON.stringify(course.learningObjectives || []),
+        modulesJson: finalModulesJson,
+        authorName: options.authorName.trim() || course.authorName || "AWIEF Faculty",
+        authorRole: options.authorRole.trim() || course.authorRole || "Course Author",
+        authorEmail: options.authorEmail?.trim() || course.authorEmail || null,
+        instructor: options.authorName.trim() || course.authorName || "AWIEF Faculty",
+        instructorRole: options.authorRole.trim() || course.authorRole || "Course Author",
+        isFree: options.isFree,
+        priceZar: options.isFree ? 0 : options.priceZar,
+        priceUsd: options.isFree ? 0 : options.priceUsd,
+        royaltyRate: options.royaltyRate,
+        learndashSourceId: course.learndashSourceId,
+        scormPath: course.scormPath || null,
+        isNative: course.isNative ?? true,
+        isPublished: options.isPublished,
+      },
+    });
+
+    return { success: true, courseId, quizCount: syncedQuizCount };
+  } catch (err: any) {
+    console.error("Error importing LearnDash course:", err);
+    return { success: false, error: err.message || "Failed to import LearnDash course." };
   }
 }
 
@@ -301,6 +784,12 @@ export async function deleteAdminCourse(courseId: string) {
   }
 
   try {
+    await prisma.quiz.deleteMany({
+      where: { courseId },
+    });
+    await prisma.reviewComment.deleteMany({
+      where: { courseId },
+    });
     await prisma.course.delete({
       where: { id: courseId }
     });

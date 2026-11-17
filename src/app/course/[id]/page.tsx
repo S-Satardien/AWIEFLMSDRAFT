@@ -52,7 +52,31 @@ interface ModuleData {
   learningObjectives?: string[];
   caseStudy?: string;
   templateName?: string;
+  templateUrl?: string;
   quizPrompt?: string;
+  quizId?: string;
+  topics?: {
+    id?: string;
+    title: string;
+    duration?: string;
+    summary?: string;
+    videoUrl?: string;
+    documentName?: string;
+    documentUrl?: string;
+  }[];
+}
+
+function getEmbedVideoUrl(url?: string): string | null {
+  if (!url) return null;
+  const ytMatch = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([A-Za-z0-9_-]{6,})/);
+  if (ytMatch?.[1]) {
+    return `https://www.youtube.com/embed/${ytMatch[1]}`;
+  }
+  const vimeoMatch = url.match(/vimeo\.com\/(?:video\/)?(\d+)/);
+  if (vimeoMatch?.[1]) {
+    return `https://player.vimeo.com/video/${vimeoMatch[1]}`;
+  }
+  return null;
 }
 
 /**
@@ -157,6 +181,9 @@ export default function CoursePlayerPage() {
       const courseId = params.id as string;
       const courseData = await getCourseDetails(courseId);
       setCourse(courseData);
+      if (courseData && courseData.isNative === false && courseData.scormPath) {
+        setActiveLessonMode("SIMULATION");
+      }
 
       if (courseData?.modulesJson) {
         try {
@@ -238,7 +265,18 @@ export default function CoursePlayerPage() {
   };
 
   // Practical Business Template Download
-  const handleDownloadTemplate = (templateName: string) => {
+  const handleDownloadTemplate = (templateName: string, templateUrl?: string) => {
+    if (templateUrl && /^(https?:\/\/|\/)/i.test(templateUrl.trim())) {
+      const cleanUrl = templateUrl.trim();
+      if (cleanUrl.startsWith("/api/uploads/")) {
+        const sep = cleanUrl.includes("?") ? "&" : "?";
+        window.open(`${cleanUrl}${sep}download=1`, "_blank", "noopener,noreferrer");
+        return;
+      }
+      window.open(cleanUrl, "_blank", "noopener,noreferrer");
+      return;
+    }
+
     const content = `
 ================================================================================
 AWIEF DIGITAL LEARNING ACADEMY | PRACTICAL BUSINESS TOOLKIT
@@ -319,14 +357,36 @@ through investor due diligence, cashflow runway modeling, and cross-border trade
   };
 
   const currentModule = modules[activeModuleIndex];
+  const hasExplicitQuizMapping = useMemo(
+    () => modules.some((m) => Boolean(m.quizId)),
+    [modules]
+  );
 
-  // Map module to its embedded quiz
+  const courseLearningObjectives = useMemo(() => {
+    if (!course?.learningObjectives) return [] as string[];
+    try {
+      const parsed = JSON.parse(course.learningObjectives);
+      return Array.isArray(parsed) ? parsed.map(String) : [];
+    } catch {
+      return course.learningObjectives ? [String(course.learningObjectives)] : [];
+    }
+  }, [course?.learningObjectives]);
+
+  // Map module to its embedded quiz (strictly respect explicit quizId when any module defines one)
   const currentModuleQuiz = useMemo(() => {
     if (courseQuizzes.length === 0) return null;
-    // Match by module index or return course quiz
+    if (currentModule?.quizId) {
+      const explicit = courseQuizzes.find(
+        (q) => String(q.id) === String(currentModule.quizId) || String(q.dbId) === String(currentModule.quizId)
+      );
+      if (explicit) return explicit;
+    }
+    if (hasExplicitQuizMapping) {
+      return null;
+    }
     const idx = activeModuleIndex % courseQuizzes.length;
     return courseQuizzes[idx] || courseQuizzes[0];
-  }, [courseQuizzes, activeModuleIndex]);
+  }, [courseQuizzes, activeModuleIndex, currentModule, hasExplicitQuizMapping]);
 
   // Find attempt for current quiz
   const currentQuizBestAttempt = useMemo(() => {
@@ -470,6 +530,9 @@ through investor due diligence, cashflow runway modeling, and cross-border trade
                         onClick={() => {
                           setActiveModuleIndex(idx);
                           setExpandedModules({ ...expandedModules, [idx]: !isExpanded });
+                          setQuizSubmitted(false);
+                          setQuizAnswers({});
+                          setQuizScore(null);
                         }}
                         className="w-full p-3.5 text-left flex items-start justify-between gap-2"
                       >
@@ -515,16 +578,24 @@ through investor due diligence, cashflow runway modeling, and cross-border trade
                             <PlayCircle className="w-3.5 h-3.5 text-[#7F3D59]" />
                             <span>Interactive Video &amp; Simulation</span>
                           </div>
+                          {mod.topics && mod.topics.length > 0 && (
+                            <div className="flex items-center gap-2 text-gray-700 py-1 font-medium">
+                              <Layers className="w-3.5 h-3.5 text-[#7F3D59]" />
+                              <span>{mod.topics.length} Sub-Topics</span>
+                            </div>
+                          )}
                           {mod.templateName && (
                             <div className="flex items-center gap-2 text-gray-700 py-1 font-medium">
                               <Download className="w-3.5 h-3.5 text-[#D4AF37]" />
                               <span className="truncate">{mod.templateName}</span>
                             </div>
                           )}
-                          <div className="flex items-center gap-2 text-gray-700 py-1 font-medium">
-                            <HelpCircle className="w-3.5 h-3.5 text-emerald-600" />
-                            <span>Graded Module Quiz</span>
-                          </div>
+                          {(Boolean(mod.quizId) || (!hasExplicitQuizMapping && courseQuizzes.length > 0)) && (
+                            <div className="flex items-center gap-2 text-gray-700 py-1 font-medium">
+                              <HelpCircle className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>Graded Module Quiz</span>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -642,16 +713,111 @@ through investor due diligence, cashflow runway modeling, and cross-border trade
                         </div>
                       </div>
                     ) : (
-                      /* Video Lesson Player */
-                      <div className="aspect-video bg-black rounded-2xl overflow-hidden shadow-md relative">
-                        <video
-                          controls
-                          className="w-full h-full object-cover"
-                          poster="/images/investment-readiness.png"
-                        >
-                          <source src={currentModule.videoUrl || "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"} type="video/mp4" />
-                          Your browser does not support HTML5 video playback.
-                        </video>
+                      /* Video Lesson Player (MP4, YouTube, or Vimeo) */
+                      (() => {
+                        const embedUrl = getEmbedVideoUrl(currentModule.videoUrl);
+                        if (embedUrl) {
+                          return (
+                            <div className="aspect-video bg-black rounded-2xl overflow-hidden shadow-md relative">
+                              <iframe
+                                src={embedUrl}
+                                title={currentModule.title}
+                                className="w-full h-full border-0"
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                allowFullScreen
+                              />
+                            </div>
+                          );
+                        }
+                        return (
+                          <div className="aspect-video bg-black rounded-2xl overflow-hidden shadow-md relative">
+                            <video
+                              key={currentModule.videoUrl || currentModule.id}
+                              controls
+                              src={
+                                currentModule.videoUrl ||
+                                "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+                              }
+                              className="w-full h-full object-cover"
+                              poster={course?.thumbnailUrl || "/images/investment-readiness.png"}
+                            >
+                              Your browser does not support HTML5 video playback.
+                            </video>
+                          </div>
+                        );
+                      })()
+                    )}
+
+                    {/* Sub-Lessons / Topics (LearnDash Topic Support) */}
+                    {currentModule.topics && currentModule.topics.length > 0 && (
+                      <div className="p-5 rounded-2xl bg-[#FDF8F9] border border-[#EAD7E0] space-y-3">
+                        <h4 className="text-xs font-serif font-bold uppercase tracking-wider text-[#7F3D59]">
+                          Module Topics &amp; Breakdown ({currentModule.topics.length})
+                        </h4>
+                        <div className="space-y-2.5">
+                          {currentModule.topics.map((topic, tIdx) => {
+                            const topicEmbedUrl = getEmbedVideoUrl(topic.videoUrl);
+                            return (
+                              <div
+                                key={topic.id || tIdx}
+                                className="p-3.5 rounded-xl bg-white border border-gray-200 space-y-2"
+                              >
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-xs font-bold text-gray-900">
+                                    {tIdx + 1}. {topic.title}
+                                  </span>
+                                  {topic.duration && (
+                                    <span className="text-[10px] font-mono text-gray-500">
+                                      {topic.duration}
+                                    </span>
+                                  )}
+                                </div>
+                                {topic.summary && (
+                                  <p className="text-xs text-gray-600 leading-relaxed">{topic.summary}</p>
+                                )}
+                                {topic.videoUrl && !isLowBandwidth && (
+                                  topicEmbedUrl ? (
+                                    <div className="aspect-video bg-black rounded-xl overflow-hidden mt-2">
+                                      <iframe
+                                        src={topicEmbedUrl}
+                                        title={topic.title}
+                                        className="w-full h-full border-0"
+                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                        allowFullScreen
+                                      />
+                                    </div>
+                                  ) : (
+                                    <div className="aspect-video bg-black rounded-xl overflow-hidden mt-2">
+                                      <video
+                                        key={topic.videoUrl}
+                                        controls
+                                        src={topic.videoUrl}
+                                        className="w-full h-full object-cover"
+                                      />
+                                    </div>
+                                  )
+                                )}
+                                {(topic.documentUrl || topic.documentName) && (
+                                  <div className="pt-1">
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        handleDownloadTemplate(
+                                          topic.documentName || `${topic.title} Resource`,
+                                          topic.documentUrl
+                                        )
+                                      }
+                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#FDF8F9] hover:bg-[#EAD7E0]/60 text-[#7F3D59] border border-[#EAD7E0] text-[11px] font-bold transition-colors"
+                                    >
+                                      <Download className="w-3.5 h-3.5 text-[#D4AF37]" />
+                                      <span>{topic.documentName || "Download Topic Document"}</span>
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
                     )}
 
@@ -713,7 +879,7 @@ through investor due diligence, cashflow runway modeling, and cross-border trade
                       </p>
                     </div>
                     <button
-                      onClick={() => handleDownloadTemplate(currentModule.templateName!)}
+                      onClick={() => handleDownloadTemplate(currentModule.templateName!, currentModule.templateUrl)}
                       className="px-5 py-2.5 bg-[#7F3D59] hover:bg-[#5E2C41] text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-1.5 shrink-0 self-start sm:self-auto"
                     >
                       <Download className="w-3.5 h-3.5 text-[#D4AF37]" />
@@ -940,8 +1106,23 @@ through investor due diligence, cashflow runway modeling, and cross-border trade
                             <td className="px-4 py-4 text-right">
                               <button
                                 onClick={() => {
+                                  const matchedIdx = modules.findIndex(
+                                    (m) =>
+                                      m.quizId &&
+                                      (String(m.quizId) === String(quiz.id) ||
+                                        String(m.quizId) === String(quiz.dbId))
+                                  );
+                                  const targetIdx =
+                                    matchedIdx >= 0
+                                      ? matchedIdx
+                                      : modules.length > 0
+                                      ? qIdx % modules.length
+                                      : 0;
                                   setActiveView('MODULE');
-                                  setActiveModuleIndex(qIdx % modules.length);
+                                  setActiveModuleIndex(targetIdx);
+                                  setQuizSubmitted(false);
+                                  setQuizAnswers({});
+                                  setQuizScore(null);
                                 }}
                                 className="px-3.5 py-1.5 bg-[#7F3D59] hover:bg-[#5E2C41] text-white rounded-xl font-bold transition-all"
                               >
@@ -970,6 +1151,23 @@ through investor due diligence, cashflow runway modeling, and cross-border trade
                 </p>
               </div>
 
+              {courseLearningObjectives.length > 0 && (
+                <div className="p-5 rounded-2xl bg-[#FDF8F9] border border-[#EAD7E0] space-y-2.5">
+                  <h3 className="text-xs font-serif font-bold uppercase tracking-wider text-[#7F3D59] flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-[#D4AF37]" />
+                    <span>Course Learning Objectives</span>
+                  </h3>
+                  <ul className="space-y-1.5 text-xs text-gray-700">
+                    {courseLearningObjectives.map((obj, oIdx) => (
+                      <li key={oIdx} className="flex items-start gap-2">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 mt-0.5 shrink-0" />
+                        <span>{obj}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
               <div className="space-y-4">
                 {modules.map((m, idx) => (
                   <div key={m.id} className="p-5 rounded-2xl bg-[#FDF8F9] border border-[#EAD7E0] space-y-2">
@@ -978,7 +1176,7 @@ through investor due diligence, cashflow runway modeling, and cross-border trade
                     </span>
                     <h3 className="text-base font-serif font-bold text-gray-900">{m.title}</h3>
                     <p className="text-xs text-gray-600">{m.summary}</p>
-                    {m.keyTakeaways && (
+                    {m.keyTakeaways && m.keyTakeaways.length > 0 && (
                       <ul className="pt-2 space-y-1 text-xs text-gray-700">
                         {m.keyTakeaways.map((item, iIdx) => (
                           <li key={iIdx} className="flex items-start gap-1.5">
@@ -1008,24 +1206,25 @@ through investor due diligence, cashflow runway modeling, and cross-border trade
 
               <div className="space-y-3">
                 {modules
-                  .filter((m) => m.templateName)
-                  .map((m, idx) => (
+                  .map((m, modIdx) => ({ m, modIdx }))
+                  .filter(({ m }) => Boolean(m.templateName))
+                  .map(({ m, modIdx }) => (
                     <div
-                      key={idx}
+                      key={m.id || modIdx}
                       className="p-4 rounded-2xl border border-[#EAD7E0] bg-[#FDF8F9] flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                     >
                       <div>
                         <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
-                          From Module {idx + 1}
+                          From Module {modIdx + 1}
                         </span>
                         <h4 className="text-sm font-serif font-bold text-gray-900">{m.templateName}</h4>
                       </div>
                       <button
-                        onClick={() => handleDownloadTemplate(m.templateName!)}
+                        onClick={() => handleDownloadTemplate(m.templateName!, m.templateUrl)}
                         className="px-4 py-2 bg-[#7F3D59] hover:bg-[#5E2C41] text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 self-start sm:self-auto"
                       >
                         <Download className="w-3.5 h-3.5 text-[#D4AF37]" />
-                        <span>Download (.txt / .docx)</span>
+                        <span>{m.templateUrl ? "Download Resource" : "Download (.txt / .docx)"}</span>
                       </button>
                     </div>
                   ))}

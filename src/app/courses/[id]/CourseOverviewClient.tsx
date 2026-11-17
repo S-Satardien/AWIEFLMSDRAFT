@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import CheckoutModal from "./CheckoutModal";
-import { Zap, Package, Award, Check, BookOpen, Download } from "@/components/Icons";
+import { Zap, Package, Award, Check, BookOpen, Download, Clock } from "@/components/Icons";
 
 interface ModuleData {
   id: string;
@@ -12,13 +12,17 @@ interface ModuleData {
   duration: string;
   videoUrl?: string;
   summary: string;
-  topics?: string[];
-  caseStudy?: {
-    title: string;
-    founder?: string;
-    country?: string;
-    summary?: string;
-  };
+  topics?: (string | { id?: string; title: string })[];
+  keyTakeaways?: string[];
+  caseStudy?:
+    | string
+    | {
+        title: string;
+        founder?: string;
+        country?: string;
+        summary?: string;
+      };
+  templateName?: string;
   practicalTemplate?: {
     title: string;
     format: string;
@@ -138,7 +142,7 @@ export default function CourseOverviewClient({
               ) : (
                 <span className="px-3 py-1 bg-purple-50 text-purple-800 border border-purple-200 text-xs font-semibold rounded-full flex items-center gap-1.5">
                   <Package className="w-3.5 h-3.5 text-purple-600" />
-                  <span>SCORM 1.2 / 2004 Interactive Package</span>
+                  <span>Interactive Workshop Package</span>
                 </span>
               )}
               <span className="px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-semibold rounded-full flex items-center gap-1.5">
@@ -259,42 +263,70 @@ export default function CourseOverviewClient({
                         </span>
                         <h4 className="font-bold font-serif text-gray-900 text-base">{mod.title}</h4>
                       </div>
-                      <span className="text-xs font-bold text-[#7F3D59] bg-white border border-[#EAD7E0] px-2.5 py-1 rounded-md self-start sm:self-auto">
-                        ⏱ {mod.duration}
+                      <span className="text-xs font-bold text-[#7F3D59] bg-white border border-[#EAD7E0] px-2.5 py-1 rounded-md self-start sm:self-auto inline-flex items-center gap-1">
+                        <Clock className="w-3.5 h-3.5 text-[#7F3D59]" />
+                        <span>{mod.duration}</span>
                       </span>
                     </div>
 
                     <p className="text-xs text-gray-600 leading-relaxed">{mod.summary}</p>
 
-                    {mod.topics && mod.topics.length > 0 && (
+                    {mod.keyTakeaways && mod.keyTakeaways.length > 0 && (
                       <div className="pt-2">
                         <p className="text-[11px] font-bold text-gray-700 uppercase tracking-wider mb-1">
-                          Key Topics Covered:
+                          Module Learning Objectives:
                         </p>
                         <ul className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-xs text-gray-600 list-disc list-inside">
-                          {mod.topics.map((t, tidx) => (
-                            <li key={tidx} className="leading-normal">{t}</li>
+                          {mod.keyTakeaways.map((t, tidx) => (
+                            <li key={tidx} className="leading-normal">
+                              {t}
+                            </li>
                           ))}
                         </ul>
                       </div>
                     )}
 
-                    <div className="pt-3 border-t border-gray-200/60 flex flex-wrap gap-4 text-xs">
-                      {mod.caseStudy && (
-                        <span className="text-[#7F3D59] font-medium flex items-center gap-1.5">
-                          <BookOpen className="w-3.5 h-3.5 text-[#7F3D59]" />
-                          <span>Case Study:</span>
-                          <span className="font-semibold">{mod.caseStudy.title}</span>
-                        </span>
-                      )}
-                      {mod.practicalTemplate && (
-                        <span className="text-emerald-700 font-medium flex items-center gap-1.5">
-                          <Download className="w-3.5 h-3.5 text-emerald-700" />
-                          <span>Template:</span>
-                          <span className="font-semibold">{mod.practicalTemplate.title} ({mod.practicalTemplate.format})</span>
-                        </span>
-                      )}
-                    </div>
+                    {mod.topics && mod.topics.length > 0 && (
+                      <div className="pt-2">
+                        <p className="text-[11px] font-bold text-[#7F3D59] uppercase tracking-wider mb-1">
+                          Sub-Lessons &amp; Topics:
+                        </p>
+                        <ul className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-xs text-gray-600 list-disc list-inside">
+                          {mod.topics.map((t, tidx) => (
+                            <li key={tidx} className="leading-normal">
+                              {typeof t === "string" ? t : t.title}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {(mod.caseStudy || mod.practicalTemplate || mod.templateName) && (
+                      <div className="pt-3 border-t border-gray-200/60 flex flex-wrap gap-4 text-xs">
+                        {mod.caseStudy && (
+                          <span className="text-[#7F3D59] font-medium flex items-center gap-1.5">
+                            <BookOpen className="w-3.5 h-3.5 text-[#7F3D59] shrink-0" />
+                            <span>Case Study:</span>
+                            <span className="font-semibold">
+                              {typeof mod.caseStudy === "string"
+                                ? mod.caseStudy
+                                : mod.caseStudy.title}
+                            </span>
+                          </span>
+                        )}
+                        {(mod.practicalTemplate || mod.templateName) && (
+                          <span className="text-emerald-700 font-medium flex items-center gap-1.5">
+                            <Download className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                            <span>Template:</span>
+                            <span className="font-semibold">
+                              {mod.practicalTemplate
+                                ? `${mod.practicalTemplate.title} (${mod.practicalTemplate.format})`
+                                : mod.templateName}
+                            </span>
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

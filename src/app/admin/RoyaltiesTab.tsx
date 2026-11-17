@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Download, Printer, X } from "@/components/Icons";
 
@@ -36,6 +36,7 @@ interface TransactionItem {
 interface RoyaltiesTabProps {
   transactions: TransactionItem[];
   courses: any[];
+  initialSection?: "ALL" | "ROYALTIES" | "LEDGER";
 }
 
 /**
@@ -46,7 +47,12 @@ interface RoyaltiesTabProps {
  * @param {RoyaltiesTabProps} props - Component properties.
  * @returns {JSX.Element} The rendered royalty engine.
  */
-export default function RoyaltiesTab({ transactions, courses }: RoyaltiesTabProps) {
+export default function RoyaltiesTab({ transactions, courses, initialSection = "ALL" }: RoyaltiesTabProps) {
+  const [sectionTab, setSectionTab] = useState<"ALL" | "ROYALTIES" | "LEDGER">(initialSection);
+
+  useEffect(() => {
+    setSectionTab(initialSection);
+  }, [initialSection]);
   const [selectedMonth, setSelectedMonth] = useState<string>("ALL");
   const [selectedCourseId, setSelectedCourseId] = useState<string>("ALL");
   const [selectedAuthor, setSelectedAuthor] = useState<string>("ALL");
@@ -273,148 +279,172 @@ export default function RoyaltiesTab({ transactions, courses }: RoyaltiesTabProp
         </div>
       </div>
 
+      {/* Section View Switcher */}
+      <div className="flex flex-wrap items-center gap-2">
+        {[
+          { id: "ROYALTIES" as const, label: `Author Royalty Summary (${courseBreakdowns.length})` },
+          { id: "LEDGER" as const, label: `Gateway Settlement Ledger (${filteredTransactions.length})` },
+          { id: "ALL" as const, label: "Show Both Tables" },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => setSectionTab(tab.id)}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+              sectionTab === tab.id
+                ? "bg-[#7F3D59] text-white shadow-xs"
+                : "bg-white text-gray-700 border border-[#EAD7E0] hover:bg-[#FDF8F9]"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
       {/* Per-Author & Per-Course Summary Table */}
-      <div className="bg-white rounded-2xl border border-[#EAD7E0] shadow-xs overflow-hidden space-y-4 p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-lg font-serif font-bold text-gray-900">
-              Monthly Faculty Royalty Summary ({courseBreakdowns.length} Courses)
-            </h3>
-            <p className="text-xs text-gray-500">
-              Contracted revenue splits, gateway deductions, and net disbursements owed.
-            </p>
+      {(sectionTab === "ROYALTIES" || sectionTab === "ALL") && (
+        <div className="bg-white rounded-2xl border border-[#EAD7E0] shadow-xs overflow-hidden space-y-4 p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-serif font-bold text-gray-900">
+                Monthly Faculty Royalty Summary ({courseBreakdowns.length} Courses)
+              </h3>
+              <p className="text-xs text-gray-500">
+                Contracted revenue splits, gateway deductions, and net disbursements owed.
+              </p>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-[#FDF8F9] border-y border-[#EAD7E0] text-[10px] font-bold uppercase tracking-wider text-[#7F3D59]">
+                <tr>
+                  <th className="py-3 px-3">Masterclass &amp; Faculty</th>
+                  <th className="py-3 px-2 text-center">Sold</th>
+                  <th className="py-3 px-2.5 text-right">Gross / Fees</th>
+                  <th className="py-3 px-2.5 text-right">Net Pool</th>
+                  <th className="py-3 px-2.5 text-right font-bold text-[#7F3D59]">Author Owed</th>
+                  <th className="py-3 px-2.5 text-right">AWIEF Share</th>
+                  <th className="py-3 px-3 text-right">Statement</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {courseBreakdowns.map((item) => (
+                  <tr key={item.courseId} className="hover:bg-gray-50/70 transition-colors">
+                    <td className="py-3 px-3 align-top">
+                      <p className="font-bold text-gray-900 line-clamp-2 max-w-[260px]">{item.title}</p>
+                      <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+                        <span className="text-[11px] text-[#7F3D59] font-medium">{item.authorName}</span>
+                        <span className="px-1.5 py-0.5 rounded bg-[#FDF8F9] border border-[#EAD7E0] font-mono font-bold text-[10px] text-gray-700">
+                          {item.royaltyRate}% split
+                        </span>
+                      </div>
+                    </td>
+                    <td className="py-3 px-2 text-center font-bold text-gray-800 align-top">
+                      {item.unitsSold}
+                    </td>
+                    <td className="py-3 px-2.5 text-right font-mono align-top">
+                      <p className="text-gray-800 font-semibold">R{item.grossZar.toLocaleString()}</p>
+                      <p className="text-[10px] text-amber-700">-R{item.feesZar.toLocaleString()} fee</p>
+                    </td>
+                    <td className="py-3 px-2.5 text-right font-mono font-bold text-gray-900 align-top">
+                      R{item.netZar.toLocaleString()}
+                    </td>
+                    <td className="py-3 px-2.5 text-right font-mono font-bold text-[#7F3D59] align-top">
+                      R{item.royaltiesZar.toLocaleString()}
+                    </td>
+                    <td className="py-3 px-2.5 text-right font-mono text-gray-700 align-top">
+                      R{item.awiefShareZar.toLocaleString()}
+                    </td>
+                    <td className="py-3 px-3 text-right align-top">
+                      <button
+                        type="button"
+                        onClick={() => setActiveStatementCourse(item)}
+                        className="px-2.5 py-1.5 bg-[#FDF8F9] hover:bg-[#EAD7E0] text-[#7F3D59] rounded-lg border border-[#7F3D59]/30 font-bold text-[11px] transition-colors inline-flex items-center gap-1"
+                      >
+                        <Printer className="w-3 h-3" />
+                        <span>Statement</span>
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-[#FDF8F9] border-y border-[#EAD7E0] text-[11px] font-bold uppercase tracking-wider text-[#7F3D59]">
-              <tr>
-                <th className="py-3 px-4">Masterclass &amp; Faculty</th>
-                <th className="py-3 px-4 text-center">Royalty %</th>
-                <th className="py-3 px-4 text-center">Units Sold</th>
-                <th className="py-3 px-4 text-right">Gross (ZAR)</th>
-                <th className="py-3 px-4 text-right">Fees (ZAR)</th>
-                <th className="py-3 px-4 text-right">Net Distributable</th>
-                <th className="py-3 px-4 text-right font-bold text-[#7F3D59]">Author Owed</th>
-                <th className="py-3 px-4 text-right">AWIEF Share</th>
-                <th className="py-3 px-4 text-center">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {courseBreakdowns.map((item) => (
-                <tr key={item.courseId} className="hover:bg-gray-50/70 transition-colors">
-                  <td className="py-3 px-4 max-w-xs">
-                    <p className="font-bold text-gray-900 line-clamp-1">{item.title}</p>
-                    <p className="text-[11px] text-[#7F3D59] font-medium">{item.authorName} • {item.authorRole}</p>
-                  </td>
-                  <td className="py-3 px-4 text-center font-mono font-bold text-gray-700">
-                    {item.royaltyRate}%
-                  </td>
-                  <td className="py-3 px-4 text-center font-bold text-gray-800">
-                    {item.unitsSold}
-                  </td>
-                  <td className="py-3 px-4 text-right font-mono text-gray-700">
-                    R{item.grossZar.toLocaleString()}
-                  </td>
-                  <td className="py-3 px-4 text-right font-mono text-amber-700">
-                    -R{item.feesZar.toLocaleString()}
-                  </td>
-                  <td className="py-3 px-4 text-right font-mono font-bold text-gray-900">
-                    R{item.netZar.toLocaleString()}
-                  </td>
-                  <td className="py-3 px-4 text-right font-mono font-bold text-[#7F3D59]">
-                    R{item.royaltiesZar.toLocaleString()}
-                  </td>
-                  <td className="py-3 px-4 text-right font-mono text-gray-700">
-                    R{item.awiefShareZar.toLocaleString()}
-                  </td>
-                  <td className="py-3 px-4 text-center">
-                    <button
-                      type="button"
-                      onClick={() => setActiveStatementCourse(item)}
-                      className="px-3 py-1.5 bg-[#FDF8F9] hover:bg-[#EAD7E0] text-[#7F3D59] rounded-lg border border-[#7F3D59]/30 font-bold text-[11px] transition-colors inline-flex items-center gap-1.5"
-                    >
-                      <Printer className="w-3.5 h-3.5" />
-                      <span>Print Statement</span>
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      )}
 
       {/* Live Transaction Ledger */}
-      <div className="bg-white rounded-2xl border border-[#EAD7E0] shadow-xs overflow-hidden space-y-4 p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-lg font-serif font-bold text-gray-900">
-              Live Gateway Settlement Ledger ({filteredTransactions.length} Transactions)
-            </h3>
-            <p className="text-xs text-gray-500">
-              Auditable transaction records across PayFast, PayPal, Paystack, M-Pesa, and Scholarships.
-            </p>
+      {(sectionTab === "LEDGER" || sectionTab === "ALL") && (
+        <div className="bg-white rounded-2xl border border-[#EAD7E0] shadow-xs overflow-hidden space-y-4 p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-serif font-bold text-gray-900">
+                Live Gateway Settlement Ledger ({filteredTransactions.length} Transactions)
+              </h3>
+              <p className="text-xs text-gray-500">
+                Auditable transaction records across PayFast, PayPal, Paystack, M-Pesa, and Scholarships.
+              </p>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-[#FDF8F9] border-y border-[#EAD7E0] text-[10px] font-bold uppercase tracking-wider text-gray-600">
+                <tr>
+                  <th className="py-3 px-3">Reference &amp; Gateway</th>
+                  <th className="py-3 px-3">Learner &amp; Venture</th>
+                  <th className="py-3 px-3">Masterclass</th>
+                  <th className="py-3 px-2.5 text-right">Gross / Fee</th>
+                  <th className="py-3 px-2.5 text-right font-bold text-[#7F3D59]">Royalty</th>
+                  <th className="py-3 px-3 text-center">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 font-mono text-[11px]">
+                {filteredTransactions.map((tx) => (
+                  <tr key={tx.id} className="hover:bg-gray-50/70 transition-colors">
+                    <td className="py-3 px-3 align-top">
+                      <p className="font-bold text-gray-900 break-all">{tx.reference}</p>
+                      <div className="flex flex-wrap items-center gap-1.5 mt-0.5 font-sans">
+                        <span className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-700 font-bold text-[10px]">
+                          {tx.gateway}
+                        </span>
+                        <span className="text-gray-400 text-[10px]">
+                          {tx.createdAt ? new Date(tx.createdAt).toLocaleDateString() : ""}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="py-3 px-3 font-sans align-top">
+                      <p className="font-bold text-gray-800">{tx.user?.name || "Learner"}</p>
+                      <p className="text-gray-500 text-[10px] break-all">
+                        {tx.user?.organization || tx.user?.email}
+                      </p>
+                    </td>
+                    <td className="py-3 px-3 font-sans align-top">
+                      <p className="font-medium text-gray-800 line-clamp-2 max-w-[220px]">
+                        {tx.course?.title || "Masterclass"}
+                      </p>
+                      <p className="text-[10px] text-[#7F3D59]">{tx.course?.authorName || "Faculty"}</p>
+                    </td>
+                    <td className="py-3 px-2.5 text-right align-top">
+                      <p className="text-gray-900 font-bold">R{tx.amountZar.toLocaleString()}</p>
+                      <p className="text-[10px] text-amber-700">-R{tx.gatewayFeeZar.toLocaleString()}</p>
+                    </td>
+                    <td className="py-3 px-2.5 text-right text-[#7F3D59] font-bold align-top">
+                      R{tx.authorRoyaltyZar.toLocaleString()}
+                    </td>
+                    <td className="py-3 px-3 text-center font-sans align-top">
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                        {tx.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-[#FDF8F9] border-y border-[#EAD7E0] text-[11px] font-bold uppercase tracking-wider text-gray-600">
-              <tr>
-                <th className="py-3 px-4">Reference &amp; Date</th>
-                <th className="py-3 px-4">Learner &amp; Venture</th>
-                <th className="py-3 px-4">Masterclass</th>
-                <th className="py-3 px-4">Gateway</th>
-                <th className="py-3 px-4 text-right">Gross</th>
-                <th className="py-3 px-4 text-right">Fee</th>
-                <th className="py-3 px-4 text-right font-bold text-[#7F3D59]">Author Royalty</th>
-                <th className="py-3 px-4 text-center">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100 font-mono text-[11px]">
-              {filteredTransactions.map((tx) => (
-                <tr key={tx.id} className="hover:bg-gray-50/70 transition-colors">
-                  <td className="py-3 px-4">
-                    <p className="font-bold text-gray-900">{tx.reference}</p>
-                    <p className="text-gray-400 font-sans text-[10px]">
-                      {tx.createdAt ? new Date(tx.createdAt).toLocaleDateString() : ""}
-                    </p>
-                  </td>
-                  <td className="py-3 px-4 font-sans">
-                    <p className="font-bold text-gray-800">{tx.user?.name || "Learner"}</p>
-                    <p className="text-gray-500 text-[10px]">{tx.user?.organization || tx.user?.email}</p>
-                  </td>
-                  <td className="py-3 px-4 font-sans max-w-xs truncate">
-                    <p className="font-medium text-gray-800">{tx.course?.title || "Masterclass"}</p>
-                    <p className="text-[10px] text-[#7F3D59]">{tx.course?.authorName || "Faculty"}</p>
-                  </td>
-                  <td className="py-3 px-4 font-sans">
-                    <span className="px-2 py-0.5 rounded bg-gray-100 text-gray-700 font-bold text-[10px]">
-                      {tx.gateway}
-                    </span>
-                  </td>
-                  <td className="py-3 px-4 text-right text-gray-900 font-bold">
-                    R{tx.amountZar.toLocaleString()}
-                  </td>
-                  <td className="py-3 px-4 text-right text-amber-700">
-                    -R{tx.gatewayFeeZar.toLocaleString()}
-                  </td>
-                  <td className="py-3 px-4 text-right text-[#7F3D59] font-bold">
-                    R{tx.authorRoyaltyZar.toLocaleString()}
-                  </td>
-                  <td className="py-3 px-4 text-center font-sans">
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                      {tx.status}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      )}
 
       {/* Printable Monthly Author Statement Modal */}
       <AnimatePresence>

@@ -22,6 +22,7 @@ export default async function CatalogPage() {
   const userId = (session?.user as any)?.id;
 
   const courses = await prisma.course.findMany({
+    where: { isPublished: true },
     orderBy: { createdAt: "asc" },
   });
 
@@ -125,7 +126,7 @@ export default async function CatalogPage() {
                     ) : (
                       <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-purple-50 text-purple-800 border border-purple-200 font-medium">
                         <Package className="w-3.5 h-3.5 text-purple-600" />
-                        <span>SCORM 1.2 / 2004 Interactive E-Learning</span>
+                        <span>Interactive Workshop Simulation</span>
                       </span>
                     )}
                     <span className="inline-flex items-center gap-1.5 text-gray-500">
