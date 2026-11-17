@@ -68,4 +68,7 @@ export {
   Info,
   GripVertical,
   AlertCircle,
+  Star,
+  Briefcase,
+  ArrowLeft,
 } from "lucide-react";

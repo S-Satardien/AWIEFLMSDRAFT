@@ -7,6 +7,7 @@ import crypto from "crypto";
 import CertificateActions from "./CertificateActions";
 import DashboardNav from "@/app/dashboard/Nav";
 import Footer from "@/components/Footer";
+import { CourseReviewComposer } from "@/components/CourseReviewsSection";
 import { Award, Check } from "@/components/Icons";
 
 export const dynamic = "force-dynamic";
@@ -171,6 +172,15 @@ export default async function CertificatePage(props: {
   const verificationUrl = `${process.env.NEXTAUTH_URL || 'https://awief-lms.vercel.app'}/verify/${certificate.certificateNumber}`;
   const qrCodeImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(verificationUrl)}&color=1D0B14`;
 
+  const existingReview = await prisma.courseReview.findUnique({
+    where: {
+      userId_courseId: {
+        userId,
+        courseId,
+      },
+    },
+  });
+
   return (
     <div className="min-h-screen bg-[#F7EEF2] py-10 px-4 sm:px-6 flex flex-col items-center justify-center selection:bg-[#7F3D59] selection:text-white">
       {/* Client Action Header Bar */}
@@ -308,6 +318,24 @@ export default async function CertificatePage(props: {
 
         </div>
 
+      </div>
+
+      {/* Verified 100%-Completion Graduate Review Box */}
+      <div className="max-w-5xl w-full mt-8 no-print">
+        <CourseReviewComposer
+          courseId={courseId}
+          courseTitle={enrollment.course.title}
+          existingReview={
+            existingReview
+              ? {
+                  id: existingReview.id,
+                  rating: existingReview.rating,
+                  title: existingReview.title,
+                  comment: existingReview.comment,
+                }
+              : null
+          }
+        />
       </div>
     </div>
   );

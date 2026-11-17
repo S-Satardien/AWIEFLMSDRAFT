@@ -5,7 +5,8 @@ import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import DashboardNav from "@/app/dashboard/Nav";
 import Footer from "@/components/Footer";
-import { Award, CreditCard, Globe, Smartphone, Zap, Package, Wifi, Check } from "@/components/Icons";
+import { summarizeCourseReviews } from "@/lib/courseReviews";
+import { Award, CreditCard, Globe, Smartphone, Zap, Package, Wifi, Check, Star, ArrowRight } from "@/components/Icons";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +24,11 @@ export default async function CatalogPage() {
 
   const courses = await prisma.course.findMany({
     where: { isPublished: true },
+    include: {
+      reviews: {
+        select: { rating: true },
+      },
+    },
     orderBy: { createdAt: "asc" },
   });
 
@@ -76,6 +82,7 @@ export default async function CatalogPage() {
             const priceDisplay = course.isFree 
               ? "Free Sponsored" 
               : `R${course.priceZar.toLocaleString()} / $${course.priceUsd}`;
+            const ratingSummary = summarizeCourseReviews(course.reviews);
 
             let objectives: string[] = [];
             try {
@@ -89,7 +96,7 @@ export default async function CatalogPage() {
             return (
               <div
                 key={course.id}
-                className="bg-white rounded-3xl shadow-sm border border-[#EAD7E0] hover:shadow-xl hover:border-[#7F3D59]/40 transition-all flex flex-col justify-between overflow-hidden group"
+                className="bg-white rounded-2xl shadow-sm border border-[#EAD7E0] border-t-4 border-t-[#7F3D59] hover:shadow-xl hover:border-[#7F3D59]/60 transition-all flex flex-col justify-between overflow-hidden group"
               >
                 {/* Card Top / Header */}
                 <div className="p-8 space-y-5">
@@ -104,6 +111,13 @@ export default async function CatalogPage() {
                       <span className="text-xs font-semibold text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
                         {course.duration || "Self-Paced"}
                       </span>
+                      {ratingSummary.totalReviews > 0 && (
+                        <span className="inline-flex items-center gap-1 text-xs font-bold text-[#1D0B14] bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-full">
+                          <Star className="w-3.5 h-3.5 text-[#D4AF37] fill-[#D4AF37]" />
+                          <span>{ratingSummary.averageRating.toFixed(1)}</span>
+                          <span className="text-gray-500 font-normal">({ratingSummary.totalReviews})</span>
+                        </span>
+                      )}
                     </div>
                   </div>
 
@@ -173,17 +187,19 @@ export default async function CatalogPage() {
                 <div className="p-6 bg-[#FDF8F9] border-t border-[#EAD7E0] flex items-center justify-between gap-4">
                   <Link
                     href={`/courses/${course.id}`}
-                    className="text-xs font-bold text-gray-700 hover:text-[#7F3D59] transition-colors"
+                    className="text-xs font-bold text-gray-700 hover:text-[#7F3D59] transition-colors inline-flex items-center gap-1"
                   >
-                    View Syllabus &amp; Overview →
+                    <span>View Syllabus &amp; Overview</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
                   </Link>
 
                   {isEnrolled ? (
                     <Link
                       href={`/course/${course.id}`}
-                      className="px-5 py-2.5 bg-[#1D0B14] hover:bg-[#3E1A29] text-white rounded-xl text-xs font-bold transition-all shadow-sm"
+                      className="px-5 py-2.5 bg-[#1D0B14] hover:bg-[#3E1A29] text-white rounded-xl text-xs font-bold transition-all shadow-sm inline-flex items-center gap-1.5"
                     >
-                      Resume Course →
+                      <span>Resume Course</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
                     </Link>
                   ) : (
                     <Link

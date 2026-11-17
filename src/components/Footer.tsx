@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Award, ShieldCheck } from "@/components/Icons";
+import { Award, ShieldCheck, ArrowRight, ExternalLink } from "@/components/Icons";
 
 /**
  * Global application footer presenting AWIEF organizational identity,
@@ -63,8 +63,9 @@ export default function Footer() {
                 </Link>
               </li>
               <li>
-                <Link href="/catalog" className="hover:text-[#D4AF37] transition-colors">
-                  Full Masterclass Catalogue →
+                <Link href="/catalog" className="hover:text-[#D4AF37] transition-colors inline-flex items-center gap-1.5">
+                  <span>Full Masterclass Catalogue</span>
+                  <ArrowRight className="w-3.5 h-3.5 text-[#D4AF37]" />
                 </Link>
               </li>
             </ul>
@@ -126,8 +127,9 @@ export default function Footer() {
             <Link href="/login" className="hover:text-white transition-colors">Academy Portal</Link>
             <Link href="/catalog" className="hover:text-white transition-colors">Courses</Link>
             <Link href="/register" className="hover:text-white transition-colors">Join Cohort</Link>
-            <a href="https://www.awieforum.org" target="_blank" rel="noopener noreferrer" className="hover:text-[#D4AF37] transition-colors">
-              AWIEF Official Site ↗
+            <a href="https://www.awieforum.org" target="_blank" rel="noopener noreferrer" className="hover:text-[#D4AF37] transition-colors inline-flex items-center gap-1">
+              <span>AWIEF Official Site</span>
+              <ExternalLink className="w-3 h-3" />
             </a>
           </div>
         </div>

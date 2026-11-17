@@ -11,11 +11,11 @@ export default function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
-    <header className="w-full bg-white/95 backdrop-blur-md border-b border-gray-200 sticky top-0 z-50 shadow-sm">
+    <header className="w-full bg-white/95 backdrop-blur-md border-t-4 border-t-[#7F3D59] border-b border-gray-200 sticky top-0 z-50 shadow-xs">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
         {/* Brand Logo & Name */}
         <Link href="/" className="flex items-center gap-3.5 group">
-          <div className="h-12 w-12 rounded-xl bg-white border border-gray-200 p-1 flex items-center justify-center overflow-hidden shadow-xs">
+          <div className="h-12 w-12 rounded-xl bg-white border border-[#EAD7E0] p-1 flex items-center justify-center overflow-hidden shadow-xs">
             <img 
               src="/images/awief-logo.jpg" 
               alt="AWIEF Logo" 
@@ -34,24 +34,21 @@ export default function Navbar() {
         </Link>
 
         {/* Desktop Navigation Links */}
-        <nav className="hidden md:flex items-center space-x-7 text-sm font-semibold text-gray-700">
+        <nav className="hidden md:flex items-center space-x-8 text-sm font-semibold text-gray-700">
           <Link href="/#about-awief" className="hover:text-awief-plum transition-colors">
             About AWIEF
           </Link>
           <Link href="/catalog" className="hover:text-awief-plum transition-colors">
             Course Catalogue
           </Link>
-          <Link href="/#pillars" className="hover:text-awief-plum transition-colors">
-            Four Pillars
-          </Link>
-          <Link href="/verify/CERT-AWIEF-2026-INV-DEMO1" className="hover:text-awief-plum transition-colors flex items-center gap-1.5 text-xs px-2.5 py-1 bg-amber-50 text-amber-900 border border-amber-200 rounded-full font-bold">
-            <ShieldCheck className="w-3.5 h-3.5 text-amber-700" />
+          <Link href="/verify/CERT-AWIEF-2026-INV-DEMO1" className="hover:text-awief-plum transition-colors flex items-center gap-1.5 text-xs px-3 py-1.5 bg-[#FDF8F9] text-[#7F3D59] border border-[#EAD7E0] rounded-full font-bold">
+            <ShieldCheck className="w-3.5 h-3.5 text-[#D4AF37]" />
             Verify Credential
           </Link>
         </nav>
 
         {/* Auth CTA Actions */}
-        <div className="hidden md:flex items-center gap-4">
+        <div className="hidden md:flex items-center gap-3">
           {session ? (
             <div className="flex items-center gap-3">
               <Link 
@@ -77,14 +74,13 @@ export default function Navbar() {
             <div className="flex items-center gap-3">
               <Link 
                 href="/login"
-                className="text-sm font-bold text-gray-700 hover:text-awief-plum transition-colors px-3 py-2 flex items-center gap-1.5"
+                className="text-sm font-bold text-[#7F3D59] hover:text-[#5E2C41] border border-[#EAD7E0] bg-[#FDF8F9] hover:bg-white rounded-xl transition-colors px-4 py-2.5"
               >
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
                 1-Click Demo Login
               </Link>
               <Link 
                 href="/register"
-                className="px-5 py-2.5 bg-awief-plum hover:bg-awief-plum-dark text-white text-sm font-bold rounded-xl transition-all shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
+                className="px-5 py-2.5 bg-awief-plum hover:bg-awief-plum-dark text-white text-sm font-bold rounded-xl transition-all shadow-sm hover:shadow-md"
               >
                 Join Academy
               </Link>
@@ -133,18 +129,11 @@ export default function Navbar() {
               Course Catalogue
             </Link>
             <Link 
-              href="/#pillars" 
-              onClick={() => setMobileMenuOpen(false)}
-              className="block py-2 text-base font-semibold text-gray-700 hover:text-awief-plum"
-            >
-              Four Pillars
-            </Link>
-            <Link 
               href="/verify/CERT-AWIEF-2026-INV-DEMO1" 
               onClick={() => setMobileMenuOpen(false)}
-              className="block py-2 text-base font-bold text-amber-700"
+              className="block py-2 text-base font-bold text-[#7F3D59]"
             >
-              Verify Credential (Demo)
+              Verify Credential
             </Link>
             <div className="pt-4 border-t border-gray-100 space-y-2">
               {session ? (

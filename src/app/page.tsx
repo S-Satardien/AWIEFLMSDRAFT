@@ -5,7 +5,8 @@ import { redirect } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { prisma } from "@/lib/prisma";
-import { Award, Check } from "@/components/Icons";
+import { summarizeCourseReviews } from "@/lib/courseReviews";
+import { Award, Check, Briefcase, Users, Globe, Star, ArrowRight } from "@/components/Icons";
 
 export const dynamic = "force-dynamic";
 
@@ -24,8 +25,70 @@ export default async function HomePage() {
 
   const courses = await prisma.course.findMany({
     where: { isPublished: true },
-    orderBy: { createdAt: "asc" }
+    include: {
+      reviews: {
+        select: { rating: true },
+      },
+    },
+    orderBy: { createdAt: "asc" },
   });
+
+  const flagshipCourse =
+    courses.find((c) => c.id === "investment-readiness") || courses[0] || null;
+  const flagshipSummary = flagshipCourse
+    ? summarizeCourseReviews(flagshipCourse.reviews)
+    : null;
+
+  const awiefPillars = [
+    {
+      index: "01",
+      tag: "BUILD",
+      title: "Enterprise Development",
+      headline: "Innovative Methods to Forward Female-Led Business",
+      description:
+        "Incubators, accelerators, investment readiness training, and practical capacity programmes equipping women-owned MSMEs to scale sustainably.",
+      footer: "AWIEF Growth Accelerator",
+      accentBorder: "border-t-[#7F3D59]",
+      iconBg: "bg-[#7F3D59] text-white",
+      Icon: Briefcase,
+    },
+    {
+      index: "02",
+      tag: "CONNECT",
+      title: "Annual Conference",
+      headline: "World-Class Networking & Showcase Opportunities",
+      description:
+        "Africa's flagship women entrepreneurship forum bringing together 1,300+ founders, global investors, DFI principals, and policymakers every year.",
+      footer: "AWIEF Conference & Exhibition",
+      accentBorder: "border-t-[#D4AF37]",
+      iconBg: "bg-[#5E2C41] text-[#D4AF37]",
+      Icon: Users,
+    },
+    {
+      index: "03",
+      tag: "RECOGNISE",
+      title: "AWIEF Awards",
+      headline: "Celebrating Outstanding Female Achievement",
+      description:
+        "Continental recognition across eight industry categories honouring women entrepreneurs leading innovation in tech, agribusiness, energy, and trade.",
+      footer: "60+ Past Winners Honoured",
+      accentBorder: "border-t-[#7F3D59]",
+      iconBg: "bg-[#D4AF37] text-[#1D0B14]",
+      Icon: Award,
+    },
+    {
+      index: "04",
+      tag: "IMPACT",
+      title: "Policy & Advocacy",
+      headline: "Driving Gender Equality Across Systems & Sectors",
+      description:
+        "Evidence-based policy advocacy, ministerial roundtables, and continental research advancing women's economic participation under AfCFTA.",
+      footer: "Gender & AfCFTA Advocacy",
+      accentBorder: "border-t-[#1D0B14]",
+      iconBg: "bg-[#1D0B14] text-white",
+      Icon: Globe,
+    },
+  ];
 
   return (
     <div className="min-h-screen bg-[#FDF8F9] flex flex-col selection:bg-[#7F3D59] selection:text-white">
@@ -46,9 +109,8 @@ export default async function HomePage() {
             {/* Left Hero Content */}
             <div className="lg:col-span-7 space-y-6 text-center lg:text-left">
               <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#7F3D59]/10 border border-[#7F3D59]/25 text-[#7F3D59] text-xs font-bold uppercase tracking-wider">
-                <span className="w-2 h-2 rounded-full bg-[#D4AF37] animate-ping"></span>
                 <Award className="w-3.5 h-3.5 text-[#D4AF37]" />
-                <span>UN ECOSOC Consultative Status • Official AWIEF Academy</span>
+                <span>UN ECOSOC Consultative Status | Official AWIEF Academy</span>
               </div>
               
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-serif font-extrabold text-[#1D0B14] tracking-tight leading-[1.12]">
@@ -63,16 +125,15 @@ export default async function HomePage() {
               <div className="pt-2 flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
                 <Link 
                   href="/catalog"
-                  className="px-8 py-4 bg-[#7F3D59] hover:bg-[#5E2C41] text-white rounded-xl text-base font-bold transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 inline-flex items-center justify-center gap-2"
+                  className="px-8 py-4 bg-[#7F3D59] hover:bg-[#5E2C41] text-white rounded-xl text-base font-bold transition-all shadow-md hover:shadow-lg inline-flex items-center justify-center gap-2"
                 >
                   <span>Explore Masterclasses &amp; Pricing</span>
-                  <svg className="w-5 h-5 text-[#D4AF37]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
+                  <ArrowRight className="w-5 h-5 text-[#D4AF37]" />
                 </Link>
                 <Link 
                   href="/login"
-                  className="px-8 py-4 bg-white hover:bg-[#FDF8F9] text-[#7F3D59] border-2 border-[#7F3D59]/40 hover:border-[#7F3D59] rounded-xl text-base font-bold transition-all shadow-sm inline-flex items-center justify-center gap-2"
+                  className="px-8 py-4 bg-white hover:bg-[#FDF8F9] text-[#7F3D59] border-2 border-[#7F3D59]/40 hover:border-[#7F3D59] rounded-xl text-base font-bold transition-all shadow-xs inline-flex items-center justify-center gap-2"
                 >
-                  <span className="w-2 h-2 rounded-full bg-[#D4AF37]"></span>
                   <span>1-Click Demo Login</span>
                 </Link>
               </div>
@@ -121,14 +182,22 @@ export default async function HomePage() {
                   
                   <div className="flex items-center justify-between text-xs text-gray-500 pt-2 border-t border-gray-100">
                     <span className="font-medium text-[#7F3D59]">Faculty: Nomsa Dlamini</span>
-                    <span className="font-bold text-[#D4AF37]">Verifiable Certificate</span>
+                    {flagshipSummary && flagshipSummary.totalReviews > 0 ? (
+                      <span className="inline-flex items-center gap-1 font-bold text-[#1D0B14]">
+                        <Star className="w-3.5 h-3.5 text-[#D4AF37] fill-[#D4AF37]" />
+                        <span>{flagshipSummary.averageRating.toFixed(1)} ({flagshipSummary.totalReviews})</span>
+                      </span>
+                    ) : (
+                      <span className="font-bold text-[#7F3D59]">Verifiable Certificate</span>
+                    )}
                   </div>
 
                   <Link 
                     href="/courses/investment-readiness"
-                    className="block w-full py-3 bg-[#7F3D59] hover:bg-[#5E2C41] text-white text-center rounded-xl text-sm font-bold transition-colors shadow-md mt-2"
+                    className="w-full py-3 bg-[#7F3D59] hover:bg-[#5E2C41] text-white text-center rounded-xl text-sm font-bold transition-colors shadow-md mt-2 inline-flex items-center justify-center gap-1.5"
                   >
-                    View Syllabus &amp; Enroll →
+                    <span>View Syllabus &amp; Enroll</span>
+                    <ArrowRight className="w-4 h-4 text-[#D4AF37]" />
                   </Link>
                 </div>
               </div>
@@ -162,87 +231,55 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* About AWIEF & Four Pillars Section */}
+      {/* About AWIEF & Four Pillars Section (awieforum.org Style Guide) */}
       <section id="about-awief" className="py-20 lg:py-24 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center max-w-3xl mx-auto mb-16 space-y-4">
-            <h2 className="text-xs font-extrabold uppercase tracking-widest text-[#7F3D59]">
-              The AWIEF Ecosystem
+          <div className="text-center max-w-3xl mx-auto mb-14 space-y-4">
+            <h2 className="text-xs font-extrabold uppercase tracking-[0.2em] text-[#7F3D59]">
+              The Foundations of Our Success
             </h2>
-            <h3 className="text-3xl sm:text-4xl font-serif font-extrabold text-gray-900 tracking-tight">
-              Four Pillars Driving Continental Transformation
+            <h3 className="text-3xl sm:text-4xl font-serif font-extrabold text-[#1D0B14] tracking-tight">
+              We Facilitate, Support, and Inspire
             </h3>
-            <p className="text-base sm:text-lg text-gray-600 leading-relaxed font-light">
-              Since 2015, the <strong>Africa Women Innovation and Entrepreneurship Forum (AWIEF)</strong> has pioneered enterprise development, digital inclusion, and trade facilitation for women entrepreneurs across Africa.
+            <div className="w-16 h-1 bg-[#D4AF37] mx-auto rounded-full" />
+            <p className="text-base sm:text-lg text-gray-600 leading-relaxed font-light pt-1">
+              Since 2015, the <strong>Africa Women Innovation and Entrepreneurship Forum (AWIEF)</strong> has advanced female entrepreneurship and economic growth across 54 African nations through four interconnected pillars.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            
-            {/* Pillar 1: BUILD */}
-            <div className="bg-[#FDF8F9] rounded-2xl p-6 border border-[#EAD7E0] hover:border-[#7F3D59] transition-all hover:shadow-lg flex flex-col justify-between group">
-              <div className="space-y-3">
-                <div className="w-12 h-12 rounded-xl bg-[#7F3D59] text-white flex items-center justify-center font-bold text-sm">
-                  BUILD
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {awiefPillars.map(({ index, tag, title, headline, description, footer, accentBorder, iconBg, Icon }) => (
+              <article
+                key={tag}
+                className={`bg-white rounded-xl p-6 border border-[#EAD7E0] border-t-4 ${accentBorder} hover:shadow-xl transition-all flex flex-col justify-between group`}
+              >
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className={`w-11 h-11 rounded-lg ${iconBg} flex items-center justify-center shadow-xs`}>
+                      <Icon className="w-5 h-5" />
+                    </div>
+                    <span className="text-xs font-extrabold uppercase tracking-[0.16em] text-[#7F3D59]">
+                      {index} · {tag}
+                    </span>
+                  </div>
+                  <div className="space-y-1.5">
+                    <h4 className="text-xl font-bold font-serif text-[#1D0B14] group-hover:text-[#7F3D59] transition-colors">
+                      {title}
+                    </h4>
+                    <p className="text-xs font-semibold text-[#7F3D59] leading-snug">
+                      {headline}
+                    </p>
+                  </div>
+                  <p className="text-xs text-gray-600 leading-relaxed">
+                    {description}
+                  </p>
                 </div>
-                <h4 className="text-lg font-bold font-serif text-[#1D0B14]">1. Enterprise Growth</h4>
-                <p className="text-xs text-gray-600 leading-relaxed">
-                  Capacity development, business incubators, accelerators, and digital skills masterclasses empowering women-owned MSMEs to achieve institutional scale.
-                </p>
-              </div>
-              <div className="pt-4 border-t border-gray-200 mt-4">
-                <span className="text-xs font-bold text-[#7F3D59]">AWIEF Growth Accelerator →</span>
-              </div>
-            </div>
-
-            {/* Pillar 2: CONNECT */}
-            <div className="bg-[#FDF8F9] rounded-2xl p-6 border border-[#EAD7E0] hover:border-[#7F3D59] transition-all hover:shadow-lg flex flex-col justify-between group">
-              <div className="space-y-3">
-                <div className="w-12 h-12 rounded-xl bg-[#5E2C41] text-[#D4AF37] flex items-center justify-center font-bold text-sm">
-                  CONNECT
+                <div className="pt-4 border-t border-gray-100 mt-6 flex items-center justify-between">
+                  <span className="text-xs font-bold text-[#1D0B14]">{footer}</span>
+                  <ArrowRight className="w-3.5 h-3.5 text-[#D4AF37]" />
                 </div>
-                <h4 className="text-lg font-bold font-serif text-[#1D0B14]">2. Annual Conference</h4>
-                <p className="text-xs text-gray-600 leading-relaxed">
-                  Africa&apos;s premier women economic gathering uniting 1,300+ founders, international investors, DFI executives, and ministers every year.
-                </p>
-              </div>
-              <div className="pt-4 border-t border-gray-200 mt-4">
-                <span className="text-xs font-bold text-[#7F3D59]">AWIEF Conference 2026 →</span>
-              </div>
-            </div>
-
-            {/* Pillar 3: RECOGNISE */}
-            <div className="bg-[#FDF8F9] rounded-2xl p-6 border border-[#EAD7E0] hover:border-[#7F3D59] transition-all hover:shadow-lg flex flex-col justify-between group">
-              <div className="space-y-3">
-                <div className="w-12 h-12 rounded-xl bg-[#D4AF37] text-[#1D0B14] flex items-center justify-center font-bold text-sm">
-                  AWARD
-                </div>
-                <h4 className="text-lg font-bold font-serif text-[#1D0B14]">3. AWIEF Awards</h4>
-                <p className="text-xs text-gray-600 leading-relaxed">
-                  Continental recognition across 8 categories celebrating female trailblazers in tech innovation, agribusiness, energy, and social impact.
-                </p>
-              </div>
-              <div className="pt-4 border-t border-gray-200 mt-4">
-                <span className="text-xs font-bold text-[#7F3D59]">60+ Past Winners Honoured →</span>
-              </div>
-            </div>
-
-            {/* Pillar 4: IMPACT */}
-            <div className="bg-[#FDF8F9] rounded-2xl p-6 border border-[#EAD7E0] hover:border-[#7F3D59] transition-all hover:shadow-lg flex flex-col justify-between group">
-              <div className="space-y-3">
-                <div className="w-12 h-12 rounded-xl bg-[#1D0B14] text-white flex items-center justify-center font-bold text-sm">
-                  IMPACT
-                </div>
-                <h4 className="text-lg font-bold font-serif text-[#1D0B14]">4. Policy &amp; AfCFTA</h4>
-                <p className="text-xs text-gray-600 leading-relaxed">
-                  Evidence-based policy advocacy, parliamentary dialogues, and research papers accelerating women&apos;s full participation under the AfCFTA protocol.
-                </p>
-              </div>
-              <div className="pt-4 border-t border-gray-200 mt-4">
-                <span className="text-xs font-bold text-[#7F3D59]">Trade &amp; Gender Advocacy →</span>
-              </div>
-            </div>
-
+              </article>
+            ))}
           </div>
         </div>
       </section>
@@ -268,7 +305,7 @@ export default async function HomePage() {
               className="shrink-0 px-6 py-3 bg-[#7F3D59] hover:bg-[#5E2C41] text-white text-sm font-bold rounded-xl transition-colors shadow-sm inline-flex items-center gap-2 self-start md:self-auto"
             >
               <span>View Full Catalogue ({courses.length})</span>
-              <span>→</span>
+              <ArrowRight className="w-4 h-4 text-[#D4AF37]" />
             </Link>
           </div>
 
@@ -277,11 +314,12 @@ export default async function HomePage() {
               const priceDisplay = course.isFree 
                 ? "Free / Sponsored" 
                 : `R${course.priceZar.toLocaleString()} / $${course.priceUsd}`;
+              const ratingSummary = summarizeCourseReviews(course.reviews);
 
               return (
                 <div 
                   key={course.id} 
-                  className="bg-white rounded-3xl shadow-sm border border-[#EAD7E0] overflow-hidden hover:shadow-xl transition-all flex flex-col justify-between group relative"
+                  className="bg-white rounded-2xl shadow-sm border border-[#EAD7E0] overflow-hidden hover:shadow-xl transition-all flex flex-col justify-between group relative"
                 >
                   <div>
                     {/* Thumbnail */}
@@ -328,13 +366,21 @@ export default async function HomePage() {
 
                   <div className="p-6 pt-0 space-y-3">
                     <div className="pt-4 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
-                      <span className="flex items-center gap-1">
+                      <span className="flex items-center gap-1.5">
                         <span className="w-1.5 h-1.5 rounded-full bg-[#D4AF37]"></span>
                         {course.duration || "Self-Paced"}
                       </span>
-                      <span className="text-[#7F3D59] font-bold">
-                        {course.royaltyRate ? `${course.royaltyRate}% Author Royalty` : "Open Demo"}
-                      </span>
+                      {ratingSummary.totalReviews > 0 ? (
+                        <span className="inline-flex items-center gap-1 font-bold text-[#1D0B14]">
+                          <Star className="w-3.5 h-3.5 text-[#D4AF37] fill-[#D4AF37]" />
+                          <span>{ratingSummary.averageRating.toFixed(1)}</span>
+                          <span className="text-gray-400 font-normal">({ratingSummary.totalReviews})</span>
+                        </span>
+                      ) : (
+                        <span className="text-[#7F3D59] font-bold">
+                          {course.royaltyRate ? `${course.royaltyRate}% Author Royalty` : "Open Demo"}
+                        </span>
+                      )}
                     </div>
 
                     <div className="grid grid-cols-2 gap-2">
@@ -472,9 +518,10 @@ export default async function HomePage() {
               <div className="lg:col-span-4 flex flex-col gap-3">
                 <Link
                   href="/login"
-                  className="px-8 py-4 bg-[#D4AF37] hover:bg-[#B89628] text-[#1D0B14] text-center rounded-xl text-base font-bold transition-all shadow-lg hover:shadow-xl font-serif"
+                  className="px-8 py-4 bg-[#D4AF37] hover:bg-[#B89628] text-[#1D0B14] text-center rounded-xl text-base font-bold transition-all shadow-lg hover:shadow-xl font-serif inline-flex items-center justify-center gap-2"
                 >
-                  Enter Demo Academy →
+                  <span>Enter Demo Academy</span>
+                  <ArrowRight className="w-4 h-4" />
                 </Link>
                 <a
                   href="mailto:info@awieforum.org?subject=AWIEF%20LMS%20Partnership%20Inquiry"

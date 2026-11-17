@@ -20,6 +20,8 @@ import {
   updateReviewComment,
   deleteReviewComment,
 } from './reviewActions';
+import { getCourseReviewStatusForCurrentUser } from '@/app/courses/[id]/reviewActions';
+import { CourseReviewComposer } from '@/components/CourseReviewsSection';
 import {
   Wifi,
   Zap,
@@ -39,7 +41,9 @@ import {
   ChevronRight,
   ShieldCheck,
   Sparkles,
-  ArrowRight
+  ArrowRight,
+  Star,
+  Lock
 } from '@/components/Icons';
 
 interface ModuleData {
@@ -101,9 +105,16 @@ export default function CoursePlayerPage() {
   const scormStateRef = useRef<Record<string, string>>({});
 
   // Coursera Navigation State
-  const [activeView, setActiveView] = useState<'MODULE' | 'SYLLABUS' | 'GRADES' | 'RESOURCES'>(
-    initialTab === 'grades' ? 'GRADES' : 'MODULE'
+  const [activeView, setActiveView] = useState<'MODULE' | 'SYLLABUS' | 'GRADES' | 'RESOURCES' | 'REVIEW'>(
+    initialTab === 'grades' ? 'GRADES' : initialTab === 'review' ? 'REVIEW' : 'MODULE'
   );
+  const [existingCourseReview, setExistingCourseReview] = useState<{
+    id: string;
+    rating: number;
+    title: string | null;
+    comment: string;
+    createdAt: string;
+  } | null>(null);
   const [activeModuleIndex, setActiveModuleIndex] = useState(0);
   const [expandedModules, setExpandedModules] = useState<Record<number, boolean>>({ 0: true });
   const [activeLessonMode, setActiveLessonMode] = useState<'NATIVE' | 'SIMULATION'>('NATIVE');
@@ -202,6 +213,8 @@ export default function CoursePlayerPage() {
       setQuizAttempts(quizRes.attempts || []);
 
       if (userId) {
+        const revStatus = await getCourseReviewStatusForCurrentUser(courseId);
+        setExistingCourseReview(revStatus.existingReview);
         const eId = await getEnrollmentId(userId, courseId, true);
         if (eId) {
           setEnrollmentId(eId);
@@ -486,7 +499,7 @@ through investor due diligence, cashflow runway modeling, and cross-border trade
             </div>
 
             {/* Additional Views */}
-            <div className="flex items-center justify-between text-xs font-semibold text-gray-500 border-b border-gray-100 pb-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-semibold text-gray-500 border-b border-gray-100 pb-3">
               <button
                 onClick={() => setActiveView('SYLLABUS')}
                 className={`hover:text-[#7F3D59] transition-colors ${
@@ -501,7 +514,16 @@ through investor due diligence, cashflow runway modeling, and cross-border trade
                   activeView === 'RESOURCES' ? 'text-[#7F3D59] font-bold' : ''
                 }`}
               >
-                Toolkits &amp; Downloads
+                Toolkits
+              </button>
+              <button
+                onClick={() => setActiveView('REVIEW')}
+                className={`hover:text-[#7F3D59] transition-colors inline-flex items-center gap-1 ${
+                  activeView === 'REVIEW' ? 'text-[#7F3D59] font-bold' : ''
+                }`}
+              >
+                <Star className={`w-3.5 h-3.5 ${progressPercent >= 100 || isCompleted ? 'text-[#D4AF37] fill-[#D4AF37]' : 'text-gray-400'}`} />
+                <span>Review</span>
               </button>
             </div>
 
@@ -1007,6 +1029,38 @@ through investor due diligence, cashflow runway modeling, and cross-border trade
               )}
 
               {/* Step Navigation Controls */}
+              {(isCompleted || progressPercent >= 100) && (
+                <div className="p-5 rounded-2xl bg-emerald-50 border border-emerald-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <span className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-emerald-700">
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      100% Curriculum Complete
+                    </span>
+                    <h4 className="text-sm font-serif font-bold text-emerald-950">
+                      {existingCourseReview
+                        ? "Thank you for sharing your verified graduate review."
+                        : "Unlocked: Rate & Review This Masterclass"}
+                    </h4>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setActiveView('REVIEW')}
+                      className="px-4 py-2 bg-[#7F3D59] hover:bg-[#5E2C41] text-white rounded-xl text-xs font-bold transition-colors inline-flex items-center gap-1.5"
+                    >
+                      <Star className="w-3.5 h-3.5 text-[#D4AF37] fill-[#D4AF37]" />
+                      <span>{existingCourseReview ? "Update Review" : "Leave Graduate Review"}</span>
+                    </button>
+                    <Link
+                      href={`/course/${course?.id}/survey`}
+                      className="px-4 py-2 bg-[#D4AF37] hover:bg-[#B89628] text-[#1D0B14] rounded-xl text-xs font-bold transition-colors"
+                    >
+                      Survey &amp; Certificate
+                    </Link>
+                  </div>
+                </div>
+              )}
+
               <div className="flex items-center justify-between pt-4">
                 <button
                   type="button"
@@ -1229,6 +1283,56 @@ through investor due diligence, cashflow runway modeling, and cross-border trade
                     </div>
                   ))}
               </div>
+            </div>
+          )}
+
+          {/* VIEW 5: 100%-COMPLETION VERIFIED GRADUATE REVIEW */}
+          {activeView === 'REVIEW' && (
+            <div className="bg-white rounded-3xl p-6 sm:p-8 border border-[#EAD7E0] shadow-sm space-y-6">
+              <div className="border-b border-gray-100 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <h2 className="text-2xl font-serif font-bold text-[#1D0B14]">
+                    Verified Course Review
+                  </h2>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Published reviews appear on the public masterclass catalogue page once 100% completion is verified.
+                  </p>
+                </div>
+                <Link
+                  href={`/courses/${course?.id}#reviews`}
+                  className="text-xs font-bold text-[#7F3D59] hover:underline self-start sm:self-auto"
+                >
+                  View All Course Reviews
+                </Link>
+              </div>
+
+              {(isCompleted || progressPercent >= 100) && course?.id ? (
+                <CourseReviewComposer
+                  courseId={course.id}
+                  courseTitle={course.title}
+                  existingReview={existingCourseReview}
+                  onSaved={(rev) => setExistingCourseReview(rev)}
+                />
+              ) : (
+                <div className="p-8 rounded-2xl bg-[#FDF8F9] border border-[#EAD7E0] text-center space-y-3">
+                  <div className="w-12 h-12 rounded-xl bg-white border border-[#EAD7E0] flex items-center justify-center mx-auto text-[#7F3D59]">
+                    <Lock className="w-5 h-5" />
+                  </div>
+                  <h3 className="text-base font-serif font-bold text-[#1D0B14]">
+                    Complete 100% of Curriculum to Unlock Review
+                  </h3>
+                  <p className="text-xs text-gray-600 max-w-md mx-auto leading-relaxed">
+                    Your current curriculum completion is <strong>{progressPercent}%</strong>. Finish all remaining modules to unlock verified graduate rating &amp; review submission.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setActiveView('MODULE')}
+                    className="px-5 py-2.5 bg-[#7F3D59] hover:bg-[#5E2C41] text-white rounded-xl text-xs font-bold transition-colors"
+                  >
+                    Return to Modules
+                  </button>
+                </div>
+              )}
             </div>
           )}
 

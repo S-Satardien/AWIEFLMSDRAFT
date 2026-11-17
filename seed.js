@@ -1302,6 +1302,119 @@ async function main() {
     });
   }
 
+  // 6. Seed 100%-Completion Cohort Enrollments & Verified Graduate Reviews
+  console.log('Seeding verified 100%-completion graduate course reviews...');
+  const [wairimu, thandi, efua, aline] = cohortUsers;
+  const graduateReviewsSeed = [
+    {
+      user: wairimu,
+      courseId: 'investment-readiness',
+      rating: 5,
+      title: 'Structured our blended DFI + equity raise with precision',
+      comment:
+        'The SAFE note dilution modeling and DFI syndicate governance checklists helped EcoLink close our $1.1M blended financing round cleanly with strong founder protections.',
+    },
+    {
+      user: thandi,
+      courseId: 'investment-readiness',
+      rating: 5,
+      title: 'Practical data room architecture we deployed immediately',
+      comment:
+        'Every module focuses on real diligence questions commercial lenders and angel syndicates ask African founders. The downloadable cap table toolkit saved us weeks.',
+    },
+    {
+      user: efua,
+      courseId: 'investment-readiness',
+      rating: 4,
+      title: 'Essential financial clarity before approaching investors',
+      comment:
+        'Very clear breakdown of valuation expectations across West and Southern Africa. Adding even more regional FX sensitivity examples would make it a 5/5.',
+    },
+    {
+      user: efua,
+      courseId: 'export-readiness',
+      rating: 5,
+      title: 'AfCFTA Rules of Origin compliance made practical',
+      comment:
+        'Navigating customs preferences across ECOWAS and SADC corridors used to slow every shipment down. The Certificate of Origin walkthrough and PAPSS guide transformed our export turnaround.',
+    },
+    {
+      user: wairimu,
+      courseId: 'export-readiness',
+      rating: 5,
+      title: 'Actionable cross-border payment & tariff playbooks',
+      comment:
+        'Clear step-by-step guidance on continental settlement without punitive correspondent FX spreads. Essential for any scaling African manufacturer or distributor.',
+    },
+    {
+      user: thandi,
+      courseId: 'financial-management',
+      rating: 5,
+      title: 'Rolling 13-week cashflow template paid for itself in week one',
+      comment:
+        'Separating working capital buffers from seasonal agro-processing revenue gave our finance team true month-by-month visibility with commercial banks.',
+    },
+    {
+      user: aline,
+      courseId: 'pitch-n-grow',
+      rating: 5,
+      title: 'Sharpened our executive pitch from 18 slides to an unforgettable story',
+      comment:
+        'Used the 30-second problem framing structure and retention cohort breakdown to win two new international retail buyer partnerships out of Kigali.',
+    },
+  ];
+
+  for (const rev of graduateReviewsSeed) {
+    if (!rev.user) continue;
+    await prisma.enrollment.upsert({
+      where: {
+        userId_courseId: {
+          userId: rev.user.id,
+          courseId: rev.courseId,
+        },
+      },
+      update: {
+        status: 'COMPLETED',
+        progress: 100,
+        surveyCompleted: true,
+        certificateIssued: true,
+        completedAt: new Date('2026-11-01T14:00:00Z'),
+      },
+      create: {
+        userId: rev.user.id,
+        courseId: rev.courseId,
+        status: 'COMPLETED',
+        progress: 100,
+        surveyCompleted: true,
+        certificateIssued: true,
+        completedAt: new Date('2026-11-01T14:00:00Z'),
+      },
+    });
+
+    await prisma.courseReview.upsert({
+      where: {
+        userId_courseId: {
+          userId: rev.user.id,
+          courseId: rev.courseId,
+        },
+      },
+      update: {
+        rating: rev.rating,
+        title: rev.title,
+        comment: rev.comment,
+        isVerified: true,
+      },
+      create: {
+        userId: rev.user.id,
+        courseId: rev.courseId,
+        rating: rev.rating,
+        title: rev.title,
+        comment: rev.comment,
+        isVerified: true,
+      },
+    });
+  }
+
   console.log('Seed completed successfully!');
   console.log('---------------------------------------------------------');
   console.log('Demo Accounts Ready:');
